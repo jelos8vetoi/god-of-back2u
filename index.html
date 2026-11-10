@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>GOD OF CLOUD</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;overflow:hidden;font-family:"Segoe UI",Arial,sans-serif;color:#e8ecf4;user-select:none}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{position:relative;width:1280px;height:720px;transform-origin:center center;flex:none}
+canvas{display:block;width:1280px;height:720px;cursor:crosshair}
+#gl{background:#05060a}
+#c{position:absolute;left:0;top:0;background:transparent}
+.ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:5}
+.ov.on{display:flex}
+#menu{background:radial-gradient(ellipse at 50% 30%,#2a0d0d 0%,#07080c 65%)}
+h1{font-size:92px;letter-spacing:10px;font-weight:900;color:#fff;text-shadow:0 0 30px #f33,0 4px 0 #700}
+h1 span{color:#ff3b3b}
+.tag{letter-spacing:6px;color:#9fb0c8;margin:8px 0 34px;font-size:15px;text-transform:uppercase}
+button{font:inherit;color:#fff;background:#1a1d27;border:1px solid #3a4052;padding:12px 26px;margin:6px;cursor:pointer;letter-spacing:2px;text-transform:uppercase;font-weight:700;font-size:15px;transition:.12s}
+button:hover:not(:disabled){background:#ff3b3b;border-color:#ff3b3b;transform:translateY(-1px)}
+button:disabled{opacity:.35;cursor:default}
+.row{display:flex;flex-wrap:wrap;justify-content:center}
+.small{font-size:12px;color:#7d889c;max-width:760px;text-align:center;line-height:1.6;margin-top:22px}
+.keys{display:grid;grid-template-columns:auto auto;gap:5px 22px;font-size:14px;margin:18px 0;text-align:left}
+.keys b{color:#ff6b5b}
+#dlg{position:absolute;left:90px;right:90px;bottom:28px;min-height:150px;background:rgba(8,10,16,.93);border:1px solid #333a4c;border-left:5px solid #f33;padding:18px 26px 30px;display:none;z-index:4;cursor:pointer}
+#dlg.on{display:block}
+#dname{font-weight:800;letter-spacing:3px;font-size:14px;margin-bottom:8px}
+#dtext{font-size:21px;line-height:1.45;min-height:62px}
+#dtext.msg{font-family:Consolas,monospace;color:#bfeaff}
+#dtext.nar{font-style:italic;color:#c3ccdb}
+#dhint{position:absolute;right:16px;bottom:8px;font-size:11px;color:#667;letter-spacing:2px}
+#title{background:rgba(0,0,0,.82);pointer-events:none}
+#title .num{letter-spacing:10px;color:#ff3b3b;font-weight:700}
+#title .nm{font-size:66px;font-weight:900;letter-spacing:8px;margin:10px 0;text-align:center}
+#title .pl{color:#9fb0c8;letter-spacing:4px}
+#up{background:rgba(5,6,10,.96);justify-content:flex-start;padding:22px 34px;align-items:stretch}
+#up header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+#up h2{letter-spacing:5px;font-size:24px}
+.cur{font-weight:800;font-size:17px}.cur i{font-style:normal;color:#ffd23b;margin-left:18px}
+.cols{display:grid;grid-template-columns:1fr 1fr 1fr 250px;gap:12px;flex:1;min-height:0}
+.col{background:#0e1118;border:1px solid #262c3a;padding:12px;overflow:auto}
+.col h3{font-size:15px;letter-spacing:2px;margin-bottom:4px}
+.col p.d{font-size:11.5px;color:#8a94a8;line-height:1.4;margin-bottom:8px;min-height:48px}
+.sk{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 8px;border:1px solid #232938;margin-bottom:5px;background:#131722}
+.sk.own{border-color:#2f6b3a;background:#12201a}
+.sk div{font-size:12px;line-height:1.35}.sk div b{font-size:13px;display:block}
+.sk div span{color:#8a94a8}
+.sk button{padding:6px 10px;font-size:12px;margin:0;white-space:nowrap;letter-spacing:1px}
+.lock{opacity:.4}
+#dead,#pause,#choice{background:rgba(0,0,0,.85)}
+#dead h2{font-size:64px;color:#f33;letter-spacing:8px;margin-bottom:8px}
+#choice h2{font-size:34px;letter-spacing:5px;margin-bottom:10px}
+#choice p{color:#9fb0c8;margin-bottom:24px;max-width:700px;text-align:center;line-height:1.6}
+#choice button{padding:22px 34px;font-size:18px}
+#toast{position:absolute;top:120px;left:50%;transform:translateX(-50%);background:rgba(10,12,18,.95);border:1px solid #ffd23b;color:#ffd23b;padding:12px 26px;font-weight:800;letter-spacing:2px;display:none;z-index:6;text-align:center}
+#end{background:#000}
+#end h2{font-size:54px;letter-spacing:8px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="gl" width="1280" height="720"></canvas>
+  <canvas id="c" width="1280" height="720"></canvas>
+  <div id="toast"></div>
+  <div id="dlg"><div id="dname"></div><div id="dtext"></div><div id="dhint">ПРОБЕЛ / КЛИК — ДАЛЕЕ · ESC — ПРОПУСТИТЬ СЦЕНУ</div></div>
+
+  <div id="menu" class="ov on">
+    <h1>GOD <span>OF</span> CLOUD</h1>
+    <div class="tag">сага о кенте, голосе и девяти серверах</div>
+    <div class="row"><button id="bCont">Продолжить</button></div>
+    <div class="row">
+      <button data-d="0">Новая игра · Изи</button>
+      <button data-d="1">Новая игра · Норм</button>
+      <button data-d="2">Новая игра · Андеграунд</button>
+    </div>
+    <div class="keys">
+      <span><b>WASD</b> — движение</span><span><b>ЛКМ / ПКМ</b> — лёгкий / тяжёлый удар</span>
+      <span><b>ПРОБЕЛ</b> — перекат</span><span><b>SHIFT</b> — блок (вовремя = парирование)</span>
+      <span><b>1 2 3</b> — смена оружия</span><span><b>E</b> — руна оружия</span>
+      <span><b>Q</b> — ад-либ кента madk1d</span><span><b>R</b> — ПЕРЕГРУЗ (когда СВЭГ полон)</span>
+      <span><b>TAB</b> — прокачка</span><span><b>ESC</b> — пауза · <b>M</b> — звук</span>
+    </div>
+    <div class="small">Фанатская пародия. Все события, диалоги и персонажи-злодеи вымышлены; игра не связана с реальными артистами, лейблами, платформами и другими играми и никем из них не одобрена.</div>
+  </div>
+
+  <div id="title" class="ov"><div class="num" id="tnum"></div><div class="nm" id="tname"></div><div class="pl" id="tplace"></div></div>
+
+  <div id="up" class="ov">
+    <header><h2 id="uph">ПРОКАЧКА</h2><div class="cur">▶ <span id="uxp">0</span> прослушиваний <i>▣ <span id="utp">0</span> мастер-лент</i></div><button id="upClose">Закрыть [TAB]</button></header>
+    <div class="cols" id="upCols"></div>
+  </div>
+
+  <div id="pause" class="ov"><h2 style="letter-spacing:8px;margin-bottom:18px">ПАУЗА</h2>
+    <button id="pRes">Продолжить</button><button id="pUp">Прокачка</button><button id="pMenu">В главное меню</button></div>
+
+  <div id="dead" class="ov"><h2>ТРЕК УДАЛЁН</h2><p style="color:#9fb0c8;margin-bottom:20px" id="deadTip"></p><button id="bRetry">Перезалить</button></div>
+
+  <div id="choice" class="ov"><h2>ЯДРО ОТКРЫТО</h2>
+    <p>Алгоритм повержен, но не уничтожен. Его трон пуст. Тот, кто сядет на него, будет решать, кого услышит мир. Тот, кто сломает Ядро, вернёт всё, что было отдано, — и оставит музыку без поводыря.</p>
+    <div class="row"><button id="cA">🏏 Сломать Ядро</button><button id="cB">♛ Занять трон</button></div></div>
+
+  <div id="end" class="ov"><h2 id="endT"></h2><p class="tag" id="endS"></p><button id="bEnd">В меню</button></div>
+</div></div>
+<script src="js/three.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
