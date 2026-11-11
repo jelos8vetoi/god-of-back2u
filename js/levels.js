@@ -106,7 +106,7 @@ const LEVELS = [
   { path: 'ENE', side: [{ at: 1, d: 'S', npc: 'first' }, { at: 0, d: 'N', lore: 0, chest: { xp: 800 } }, { at: 0, d: 'S', lore: 1, guard: [[['ghost', 3], ['lawyer', 2]], [['troll', 1, 'E'], ['ghost', 3]]], chest: { hp: 10 } }] },
 ];
 
-const LV_SIZE = { start: [640, 560], fight: [1250, 900], boss: [1450, 1000], exit: [560, 480], side: [620, 540] }, COR_L = 240, COR_W = 220;
+const LV_SIZE = { start: [640, 560], fight: [1250, 900], boss: [1450, 1000], exit: [560, 480], side: [620, 540], secret: [420, 380] }, COR_L = 240, COR_W = 220;
 function buildLevel(ci) {
   const ch = CH[ci], def = LEVELS[ci], rooms = [], cors = [];
   const mk = (kind, cx, cy) => { const [w, h] = LV_SIZE[kind], r = { kind, x: cx - w / 2, y: cy - h / 2, w, h, cx, cy }; rooms.push(r); return r; };
@@ -123,8 +123,9 @@ function buildLevel(ci) {
   enc.forEach((si, k) => { const r = attach(main[k], def.path[k], ch.steps[si].t === 'boss' ? 'boss' : 'fight'); r.step = si; stepRoom[si] = r; main.push(r); });
   const exit = attach(main[main.length - 1], def.path[enc.length], 'exit');
   const sides = (def.side || []).map((s, i) => { const r = attach(main[s.at], s.d, 'side'); r.side = Object.assign({ id: 'c' + ci + 's' + i }, s); return r; });
+  const sd = 'ENS'[ci % 3], sec = attach(exit, sd, 'secret'); sec.secret = true; sec.side = { id: 'c' + ci + 'sec', d: sd }; cors[cors.length - 1].secret = true;
   const all = rooms.concat(cors); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const r of all) { x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); }
   for (const r of all) { r.x += 300 - x0; r.y += 300 - y0; if (r.cx != null) { r.cx += 300 - x0; r.cy += 300 - y0; } }
-  return { rooms, cors, rects: all, main, exit, sides, stepRoom, w: x1 - x0 + 600, h: y1 - y0 + 600 };
+  return { rooms, cors, rects: all, main, exit, sides, sec, stepRoom, w: x1 - x0 + 600, h: y1 - y0 + 600 };
 }

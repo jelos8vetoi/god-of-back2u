@@ -197,8 +197,14 @@ function loadLevel() {
     if (s.chest) ents.push({ k: 'chest', id: s.id + 'c', loot: s.chest, x: r.cx + 180, y: r.cy + 110, room: r });
   }
   makeDeco();
+  { const sc = LV.sec, s = sc.side, e = LV.exit, hz = s.d !== 'E', id = s.id;
+    const o = { k: 'swall', id, hz, hp: 3, dead: !!S.done[id], x: s.d === 'E' ? e.x + e.w + 10 : e.cx, y: s.d === 'E' ? e.cy : s.d === 'N' ? e.y - 10 : e.y + e.h + 10 };
+    ents.push(o); if (!o.dead) for (const t of [-76, 0, 76]) obs.push({ x: o.x + (hz ? t : 0), y: o.y + (hz ? 0 : t), r: 44, sw: o });
+    ents.push({ k: 'chest', id: id + 'c', loot: [{ tapes: 1 }, { hp: 10 }, { xp: 500 + S.ch * 100 }][S.ch % 3], x: sc.cx, y: sc.cy, room: sc });
+    [LV.main[1], LV.main[2]].forEach((r, i) => { if (!r) return; const c = (S.ch + i * 3) % 4; ents.push({ k: 'stash', id: 'c' + S.ch + 'st' + i, i, x: c % 2 ? r.x + r.w - 62 : r.x + 62, y: c < 2 ? r.y + 62 : r.y + r.h - 62 }); });
+  }
   for (const r of LV.rooms) {
-    if (r.kind === 'boss') for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) obs.push({ x: r.cx + dx * (r.w / 2 - 80), y: r.cy + dy * (r.h / 2 - 80), r: 30 });
+    if (r.kind === 'boss') for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) obs.push({ x: r.cx + dx * (r.w / 2 - 80), y: r.cy + dy * (r.h / 2 - 80), r: 48 });
     if (r.kind === 'fight' || r.kind === 'boss') for (let i = 0, t = 0; i < 4 && t < 60; t++) {
       const x = rnd(r.x + 110, r.x + r.w - 110), y = rnd(r.y + 110, r.y + r.h - 110);
       if (Math.hypot(x - r.cx, y - r.cy) < 190 || obs.some(b => Math.hypot(b.x - x, b.y - y) < b.r + 70)) continue;
@@ -232,6 +238,16 @@ function reward(rw, title) {
   if (rw.item) { S.trk.owned[rw.item] = 1; if (S.trk.eq.length < 3) S.trk.eq.push(rw.item); a.push('цацка «' + TRK[rw.item].n + '» (TAB — надеть/снять)'); }
   toast(title + ':  ' + a.join('  ·  '), 5); sfx.buy(); save();
 }
+function secretCheck() {
+  const p = 'c' + S.ch; if (S.done[p + 'all'] || !(S.done[p + 'sec'] && S.done[p + 'st0'] && (S.done[p + 'st1'] || !LV.main[2]))) return;
+  S.done[p + 'all'] = 1; S.tapes++; timers.push({ t: 2.5, f: () => toast('✨ Все секреты главы найдены:  +1 ▣ мастер-лента', 4.5) });
+}
+function hitWall(o, heavy) {
+  if (o.dead) return;
+  if (!heavy) { if (!(o.wT > T)) { o.wT = T + 1.5; float(o.x, o.y - 60, 'нужен тяжёлый удар', '#c9a36b'); } noise(.06, .12, 600); return; }
+  if (o.hT > T) return; o.hT = T + .25; o.hp--; burst(o.x, o.y, '#9a9a9a', 16); sfx.hit(true); shake = Math.max(shake, 8);
+  if (o.hp <= 0) { o.dead = true; S.done[o.id] = 1; obs = obs.filter(b => b.sw !== o); sfx.boom(); ring(o.x, o.y, 160, '#ffd23b'); toast('✨ СЕКРЕТ НАЙДЕН — тайная комната открыта', 4); secretCheck(); save(); }
+}
 function breakIt(o) {
   if (o.dead) return; o.dead = true; obs = obs.filter(b => b !== o); burst(o.x, o.y, o.ex ? '#ff5a2a' : '#c9a36b', 16); sfx.hit(true);
   if (!o.ex) { S.xp += 8; float(o.x, o.y - 30, '+8 ▶', '#7dff7d'); if (Math.random() < .4) orbs.push({ x: o.x, y: o.y, l: 12 }); return; }
@@ -247,6 +263,7 @@ function hitProps(x, y, r, byPlayer) {
   for (const o of ents) {
     if (o.dead) continue;
     if (o.k === 'brk' && Math.hypot(o.x - x, o.y - y) < o.r + r) { breakIt(o); hit = true; }
+    else if (o.k === 'swall' && byPlayer && Math.hypot(o.x - x, o.y - y) < 70 + r) { hitWall(o, true); hit = true; }
     else if (o.k === 'tgt' && byPlayer && Math.hypot(o.x - x, o.y - y) < 46 + r) {
       o.dead = true; S.done[o.id] = 1; hit = true; burst(o.vx, o.vy, '#ffd23b', 18); sfx.parry();
       const left = ents.filter(q => q.k === 'tgt' && q.room === o.room && !q.dead).length;
@@ -306,11 +323,13 @@ function scan() {
   for (const o of ents) {
     if (o.k === 'tgt' || o.k === 'brk') continue;
     const d = dist(o, P);
+    if (o.k === 'swall') { if (!o.dead && d < 170) prompt = 'Завал звучит пусто…  Разбей тяжёлым ударом [ПКМ] или броском биты [C]'; continue; }
     if (o.k === 'lore') { if (!S.done[o.id] && d < 44) { S.done[o.id] = 1; S.xp += 60; toast('📼  ' + LORE[S.ch][o.i], 9); sfx.pick(); save(); } }
     else if (o.k === 'portal') {
       if (d < 58) { if (exitOpen()) { nextChapter(); return; } if (!(o.w > T)) { o.w = T + 3; toast('Портал закрыт: сначала разберись с этим сервером', 2.5); } }
     } else if (d < 95) {
       if (o.k === 'chest') { if (S.done[o.id] || (o.room.side.guard && !S.done[o.room.side.id])) continue; if (o.lock && !S.done[o.lock]) { prompt = '🔒  Сбей 3 мишени 🎯 на стене: бросок биты [C] или диски'; continue; } prompt = '[F]  Открыть сундук'; }
+      else if (o.k === 'stash') { if (S.done[o.id] || d > 70) continue; prompt = '[F]  ✨ Тайник'; }
       else if (o.k === 'npc') prompt = '[F]  Поговорить: ' + NPCS[o.id].n;
       else prompt = '[F]  Дядя Сева на связи — мастерская';
       target = { o };
@@ -366,6 +385,7 @@ function doInteract() {
   if (target.fin) { doFinish(target.fin); return; }
   const o = target.o;
   if (o.k === 'chest') { S.done[o.id] = 1; reward(o.loot, 'Сундук'); }
+  else if (o.k === 'stash') { S.done[o.id] = 1; reward({ xp: 80 + S.ch * 25, hp: o.i ? 0 : 5 }, '✨ Тайник'); secretCheck(); save(); }
   else if (o.k === 'npc') talk(o);
   else { P.hp = maxHp(); openUp(true); }
 }
@@ -496,7 +516,7 @@ function doHit(a, em) {
   if (w === 'mic' && a.heavy && sk('m1')) arc = TAU;
   const hit = [];
   for (const e of ens) { if (e.dead || e.spawn > 0) continue; if (dist(e, P) <= range + e.r && (arc >= TAU || adiff(ang(P, e), a.a) <= arc / 2)) hit.push(e); }
-  for (const o of ents) if (o.k === 'brk' && !o.dead && dist(o, P) <= range + o.r && (arc >= TAU || adiff(ang(P, o), a.a) <= arc / 2)) breakIt(o);
+  for (const o of ents) { if (o.dead) continue; if (o.k === 'brk' && dist(o, P) <= range + o.r && (arc >= TAU || adiff(ang(P, o), a.a) <= arc / 2)) breakIt(o); else if (o.k === 'swall' && dist(o, P) <= range + 70 && (arc >= TAU || adiff(ang(P, o), a.a) <= arc / 2 + .4)) hitWall(o, a.heavy || fin3); }
   for (const e of hit) dmgE(e, base * mult, { w, kb: d.kb * (fin3 ? 1.6 : 1), stun, heavy: a.heavy || fin3 && w === 'bat' });
   if (w === 'bat' && a.heavy && sk('b1')) {
     const cx = P.x + Math.cos(a.a) * range * .8, cy = P.y + Math.sin(a.a) * range * .8;
@@ -646,8 +666,10 @@ function updPlayer(dt) {
   else if (!okPos(P.x, P.y, P.r)) { if (okPos(P.x, oy, P.r)) P.y = oy; else if (okPos(ox, P.y, P.r)) P.x = ox; else { P.x = ox; P.y = oy; } }
   pushOut(P, P.r);
   // кент идёт следом
-  const tx = P.x + Math.cos(P.aim) * 30 + Math.sin(P.aim) * 95, ty = P.y + Math.sin(P.aim) * 30 - Math.cos(P.aim) * 95;
+  let tx = P.x, ty = P.y;
+  for (const [f, s] of [[30, 95], [30, -95], [-70, 45], [-70, -45]]) { const x = P.x + Math.cos(P.aim) * f + Math.sin(P.aim) * s, y = P.y + Math.sin(P.aim) * f - Math.cos(P.aim) * s; if (okPos(x, y, 16) && !obs.some(b => Math.hypot(b.x - x, b.y - y) < b.r + 14)) { tx = x; ty = y; break; } }
   comp.x += (tx - comp.x) * Math.min(1, dt * 4); comp.y += (ty - comp.y) * Math.min(1, dt * 4);
+  pushOut(comp, 10); if (!okPos(comp.x, comp.y, 12)) { comp.x = P.x; comp.y = P.y; }
   if (comp.sayT > 0) comp.sayT -= dt;
 }
 
@@ -1102,6 +1124,8 @@ function buildWorld(th) {
       if (o.k === 'seva') { const b = new T3.Group(); b.add(box(44, 26, 28, '#3a2718', 0, 13, 0), box(30, 2, 20, '#49e0ff', 0, 27, 0, { emissive: '#49e0ff', emissiveIntensity: .9 })); b.position.set(o.x, 0, o.y + 50); worldG.add(b); }
     } else if (o.k === 'chest') g.add(box(46, 26, 30, '#7a4a1e', 0, 13, 0), box(48, 8, 32, '#ffd23b', 0, 28, 0, { metalness: .7, roughness: .3, emissive: '#553a00', emissiveIntensity: .7 }), emo(o.loot.hp ? '💛' : o.loot.tapes ? '📀' : '🎁', 24, 58));
     else if (o.k === 'lore') g.add(emo('📼', 36, 30));
+    else if (o.k === 'swall') { for (const t of [-78, 0, 78]) { const rk = prop(t ? 'p_rock_single_C' : 'p_rock_single_A', 120 + Math.random() * 30) || box(80, 120, 60, '#5a5a5a', 0, 60, 0); rk.position.set(o.hz ? t : 0, rk.position.y, o.hz ? 0 : t); rk.rotation.y = Math.random() * 6; g.add(rk); } }
+    else if (o.k === 'stash') g.add(emo('✨', 26, 14));
     else if (o.k === 'tgt') { const t = prop('p_target', 56) || (() => { const q = new T3.Group(); q.add(cyl(26, 26, 5, '#e8e8e8', 0, 28, 0), cyl(14, 14, 6, '#ff3b3b', 0, 28, 0)); q.children.forEach(c => { c.rotation.x = Math.PI / 2; }); return q; })(); t.position.set(o.vx - o.x, 46, o.vy - o.y); t.rotation.y = o.ry; g.add(t, emo('🎯', 22, 120)); g.children[1].position.set(o.vx - o.x, 120, o.vy - o.y); }
     else if (o.k === 'brk') { const b = prop(o.ex ? 'p_Barrel_A' : 'p_Box_A', o.ex ? 44 : 36, o.ex ? { tint: '#ff3b3b', emi: .35 } : null) || box(34, 34, 34, o.ex ? '#c0392b' : '#8a5a2a', 0, 17, 0); g.add(b); if (o.ex) g.add(emo('💥', 20, 62)); g.rotation.y = o.x; }
     else if (o.k === 'portal') {
@@ -1125,7 +1149,7 @@ function drawNav() {
     const n = NPCS[o.id], q = S.q[o.id], rd = qReady(o.id);
     X.fillStyle = rd ? '#7dff7d' : '#c3ccdb'; X.fillText('◇ ' + (rd ? 'Вернись к ' + n.n : n.q.txt + (n.q.type === 'kill' ? '  (' + q.n + '/' + n.q.n + ')' : '')), 30, y); y += 19;
   }
-  const lc = [0, 1].filter(i => S.done['c' + S.ch + 'lore' + i]).length; X.fillStyle = '#8d97aa'; X.fillText('📼 кассеты: ' + lc + ' / 2', 30, y);
+  const lc = [0, 1].filter(i => S.done['c' + S.ch + 'lore' + i]).length; X.fillStyle = '#8d97aa'; X.fillText('📼 кассеты: ' + lc + ' / 2     ✨ секреты: ' + ['sec', 'st0', 'st1'].filter(q => S.done['c' + S.ch + q]).length + ' / ' + (LV.main[2] ? 3 : 2), 30, y);
   // стрелка к цели
   const tg = !fs && (exitOpen() ? ents.find(o => o.k === 'portal') : objRoom ? { x: objRoom.cx, y: objRoom.cy } : null);
   if (tg && dist(tg, P) > 260) { const a = ang(P, tg), q = proj(P.x + Math.cos(a) * 90, P.y + Math.sin(a) * 90, 4), q2 = proj(P.x + Math.cos(a) * 130, P.y + Math.sin(a) * 130, 4), sa = Math.atan2(q2.y - q.y, q2.x - q.x);
@@ -1135,9 +1159,9 @@ function drawNav() {
   // мини-карта
   const k = Math.min(210 / LV.w, 130 / LV.h), mx = W - 30 - LV.w * k, my = 92;
   X.fillStyle = 'rgba(0,0,0,.5)'; X.fillRect(mx - 6, my - 6, LV.w * k + 12, LV.h * k + 12);
-  for (const r of LV.rects) { X.fillStyle = r === objRoom ? 'rgba(255,210,59,.8)' : r.kind === 'cor' ? 'rgba(255,255,255,.2)' : r.kind === 'boss' ? 'rgba(255,80,80,.5)' : r.kind === 'side' ? 'rgba(120,200,255,.3)' : 'rgba(255,255,255,.34)'; X.fillRect(mx + r.x * k, my + r.y * k, Math.max(2, r.w * k), Math.max(2, r.h * k)); }
+  for (const r of LV.rects) { if (r.secret && !S.done[LV.sec.side.id]) continue; X.fillStyle = r.secret ? 'rgba(255,210,59,.45)' : r === objRoom ? 'rgba(255,210,59,.8)' : r.kind === 'cor' ? 'rgba(255,255,255,.2)' : r.kind === 'boss' ? 'rgba(255,80,80,.5)' : r.kind === 'side' ? 'rgba(120,200,255,.3)' : 'rgba(255,255,255,.34)'; X.fillRect(mx + r.x * k, my + r.y * k, Math.max(2, r.w * k), Math.max(2, r.h * k)); }
   for (const o of ents) {
-    if (o.k === 'tgt' || o.k === 'brk') continue;
+    if (o.k === 'tgt' || o.k === 'brk' || o.k === 'swall' || o.k === 'stash' || (o.room && o.room.secret && !S.done[LV.sec.side.id])) continue;
     if (o.k === 'lore' || o.k === 'chest') { if (S.done[o.id]) continue; X.fillStyle = '#c9a36b'; }
     else if (o.k === 'npc') X.fillStyle = S.q[o.id] && S.q[o.id].st === 3 ? '#557' : '#5cd0ff'; else if (o.k === 'seva') X.fillStyle = '#ffae3b'; else X.fillStyle = exitOpen() ? '#49e0ff' : '#557';
     X.fillRect(mx + o.x * k - 2, my + o.y * k - 2, 4, 4);
@@ -1482,7 +1506,8 @@ function render() {
   for (const o of ents) {
     if (!o.m) continue;
     if (o.k === 'chest') o.m.visible = !S.done[o.id];
-    else if (o.k === 'tgt' || o.k === 'brk') o.m.visible = !o.dead;
+    else if (o.k === 'tgt' || o.k === 'brk' || o.k === 'swall') o.m.visible = !o.dead;
+    else if (o.k === 'stash') { o.m.visible = !S.done[o.id] && dist(o, P) < 420; o.m.children[0].material.opacity = .35 + .35 * Math.sin(now * 5 + o.x); }
     else if (o.k === 'lore') { o.m.visible = !S.done[o.id]; o.m.position.y = Math.sin(now * 3) * 6; }
     else if (o.k === 'portal') { const op = exitOpen(), c = op ? '#49e0ff' : '#44485a'; o.m.children[0].material.color.set(c); o.m.children[0].material.emissive.set(c); o.m.children[1].material.color.set(c); o.m.children[0].rotation.z = now * (op ? 1.5 : .2); }
     else o.m.rotation.y = -ang(o, P);
