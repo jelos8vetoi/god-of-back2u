@@ -5,7 +5,10 @@
 <title>GOD OF CLOUD</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
+@font-face{font-family:"Russo One";src:url(fonts/RussoOne-Regular.ttf) format("truetype");font-display:swap}
 *{box-sizing:border-box;margin:0;padding:0}
+*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-track{background:#0b0d13}*::-webkit-scrollbar-thumb{background:linear-gradient(#ff3b3b,#7a1414)}
+h1,h2,h3,button,.tag,#dname,#title .nm,#title .num,.cur{font-family:"Russo One","Segoe UI",Arial,sans-serif;font-weight:400}
 html,body{height:100%;background:#000;overflow:hidden;font-family:"Segoe UI",Arial,sans-serif;color:#e8ecf4;user-select:none}
 #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
 #stage{position:relative;width:1280px;height:720px;transform-origin:center center;flex:none}
@@ -40,7 +43,19 @@ button:disabled{opacity:.35;cursor:default}
 #up header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 #up h2{letter-spacing:5px;font-size:24px}
 .cur{font-weight:800;font-size:17px}.cur i{font-style:normal;color:#ffd23b;margin-left:18px}
-.cols{display:grid;grid-template-columns:1fr 1fr 1fr 250px;gap:12px;flex:1;min-height:0}
+.cols{display:flex;flex-direction:column;flex:1;min-height:0}
+.tabs{display:flex;gap:6px;margin-bottom:12px}.tab{flex:1;margin:0;padding:11px 6px;font-size:13px;letter-spacing:1px;transform:skewX(-12deg)}.tab.on{background:#ff3b3b;border-color:#ff3b3b;box-shadow:0 0 18px rgba(255,59,59,.5)}
+.pane{flex:1;min-height:0;overflow:auto;padding-right:8px;scrollbar-width:thin;scrollbar-color:#ff3b3b #0b0d13}
+.hero{display:flex;gap:20px;align-items:center;background:linear-gradient(90deg,#1a1f2c,#0e1118);border:1px solid;border-left-width:6px;padding:14px 20px;margin-bottom:12px}
+.hero .big{font-size:56px}.hero h3{font-size:21px;letter-spacing:2px}.hero p{font-size:13px;color:#9aa5b8;margin:4px 0 9px;max-width:660px;line-height:1.45}
+.hero button{margin-left:auto;white-space:nowrap}.hero small,.card small{display:block;font-size:10px;opacity:.7;letter-spacing:0}
+.pips{display:flex;gap:5px;align-items:center}.pips i{width:28px;height:8px;background:#2a3040;transform:skewX(-20deg)}.pips i.on{background:#ffd23b;box-shadow:0 0 8px rgba(255,210,59,.6)}.pips em{font-size:12px;color:#8a94a8;margin-left:10px;font-style:normal}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid.g3{grid-template-columns:1fr 1fr 1fr}
+.card{position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:68px;padding:11px 14px 11px 58px;background:#131722;border:1px solid #232938;transition:.12s}
+.card:hover{border-color:#4a5268;transform:translateX(2px)}.card.own{border-color:#2f6b3a;background:linear-gradient(90deg,#12261b,#131722)}.card.lock{opacity:.45}
+.card b{display:block;font-size:14px;margin-bottom:3px}.card div span{font-size:12px;color:#8a94a8;line-height:1.4}.card button{margin:0;padding:8px 12px;font-size:13px;white-space:nowrap}
+.bdg{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-style:normal;font-family:"Russo One",sans-serif;font-size:11px;color:#ffd23b;border:1px solid #ffd23b;padding:4px 5px;min-width:38px;text-align:center}
+.ok{color:#7dff7d;font-size:20px}.need{color:#ffd23b;font-size:12px;white-space:nowrap}.max{color:#ffd23b;font-family:"Russo One",sans-serif;margin-left:auto}
 .col{background:#0e1118;border:1px solid #262c3a;padding:12px;overflow:auto}
 .col h3{font-size:15px;letter-spacing:2px;margin-bottom:4px}
 .col p.d{font-size:11.5px;color:#8a94a8;line-height:1.4;margin-bottom:8px;min-height:48px}
@@ -78,9 +93,9 @@ button:disabled{opacity:.35;cursor:default}
     </div>
     <div class="keys">
       <span><b>WASD</b> — движение</span><span><b>ЛКМ / ПКМ</b> — лёгкий / тяжёлый (держи ПКМ — заряд)</span>
-      <span><b>ПРОБЕЛ</b> — перекат</span><span><b>SHIFT</b> — блок (вовремя = парирование)</span>
+      <span><b>МЫШЬ</b> — камера · <b>ПРОБЕЛ</b> — перекат</span><span><b>SHIFT</b> — блок (вовремя = парирование)</span>
       <span><b>1 2 3</b> — смена оружия</span><span><b>E</b> — руна оружия</span>
-      <span><b>Q</b> — ад-либ кента madk1d</span><span><b>R</b> — ПЕРЕГРУЗ (когда СВЭГ полон)</span>
+      <span><b>Q</b> — ад-либ кента · <b>C</b> — бросок/возврат биты</span><span><b>R</b> — ПЕРЕГРУЗ (когда СВЭГ полон)</span>
       <span><b>F</b> — говорить / сундук / добивание · <b>TAB</b> — прокачка</span><span><b>ESC</b> — пауза · <b>M</b> — звук</span>
     </div>
     <div class="small">Фанатская пародия. Все события, диалоги и персонажи-злодеи вымышлены; игра не связана с реальными артистами, лейблами, платформами и другими играми и никем из них не одобрена.</div>
