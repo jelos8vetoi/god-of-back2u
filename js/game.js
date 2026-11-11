@@ -51,20 +51,76 @@ const sfx = {
   type: () => tone(rnd(500, 620), .02, 'square', .025),
 };
 const midi = n => 440 * Math.pow(2, (n - 69) / 12);
-let mStep = 0, mNext = 0;
-const BASS = { 0: 0, 6: 0, 10: 3, 16: 0, 20: -2, 22: -2, 27: 5, 30: 3 };
+/* ---------- музыка: свой стиль у каждой локации ---------- */
+const SC_MIN = [0, 2, 3, 5, 7, 8, 10], SC_PHR = [0, 1, 3, 5, 7, 8, 10], SC_DOR = [0, 2, 3, 5, 7, 9, 10], SC_HM = [0, 2, 3, 5, 7, 8, 11];
+const MUS = [
+  { n: 'клауд-рэп', bpm: 132, root: 45, sc: SC_MIN, prog: [0, 5, 3, 4], lead: 'bell', k: [0, 6, 10], s: [8], hat: 2, dens: .45, bass: [0, 6, 10] },
+  { n: 'бум-бэп из подвала', bpm: 88, root: 43, sc: SC_DOR, prog: [0, 3, 0, 4], lead: 'ep', k: [0, 7, 10], s: [4, 12], hat: 2, swing: .12, dens: .6, bass: [0, 7, 10], crackle: 1 },
+  { n: 'клубный гиперпоп', bpm: 150, root: 48, sc: SC_MIN, prog: [0, 5, 2, 6], lead: 'sq', k: [0, 4, 8, 11, 14], s: [4, 12], hat: 1, dens: .8, bass: [0, 8, 11], arp: 1 },
+  { n: 'витч-хаус', bpm: 108, root: 38, sc: SC_PHR, prog: [0, 1, 0, 5], lead: 'saw', k: [0, 10], s: [8], hat: 4, dens: .3, bass: [0, 10], dark: 1 },
+  { n: 'дрилл', bpm: 142, root: 41, sc: SC_HM, prog: [0, 5, 3, 6], lead: 'ep', k: [0, 7, 10], s: [6, 14], hat: 'drill', dens: .5, bass: [0, 3, 7, 10], slide: 1 },
+  { n: 'эмо-рэп', bpm: 120, root: 45, sc: SC_MIN, prog: [0, 5, 2, 4], lead: 'pluck', k: [0, 8], s: [4, 12], hat: 2, dens: .75, bass: [0, 8], arp: 1 },
+  { n: 'фонк', bpm: 136, root: 40, sc: SC_PHR, prog: [0, 0, 1, 0], lead: 'cow', k: [0, 3, 8, 11], s: [4, 12], hat: 1, dens: .7, bass: [0, 3, 8, 11], dist: 1 },
+  { n: 'рейдж', bpm: 156, root: 46, sc: SC_MIN, prog: [0, 3, 5, 4], lead: 'saw', k: [0, 6, 8, 14], s: [4, 12], hat: 1, dens: .65, bass: [0, 6, 8, 14] },
+  { n: 'драм-н-бейс', bpm: 172, root: 39, sc: SC_PHR, prog: [0, 1, 5, 4], lead: 'sq', k: [0, 10], s: [4, 12], hat: 1, dens: .55, bass: [0, 10, 13], dark: 1, arp: 1 },
+];
+let mStep = 0, mNext = 0, mCh = -1, mMel = [], FX = null;
+function mkMel(ch) {
+  let sd = 1234 + ch * 977; const R = () => (sd = (sd * 16807) % 2147483647) / 2147483647, m = MUS[ch], out = []; let deg = 4;
+  for (let i = 0; i < 64; i++) {
+    if (i >= 32 && R() < .78) { out.push(out[i - 32]); continue; }
+    const strong = i % 4 === 0, on = m.arp ? i % 2 === 0 : R() < (strong ? m.dens : m.dens * .35);
+    if (!on) { out.push(null); continue; }
+    if (m.arp) deg = [0, 2, 4, 7, 4, 2][(i / 2 | 0) % 6] + (R() < .15 ? 1 : 0); else deg = clamp(deg + Math.round((R() - .5) * 5), 0, 9);
+    out.push(deg);
+  }
+  return out;
+}
+function fxOut() {
+  if (!FX) { const d = AC.createDelay(1), fb = AC.createGain(), w = AC.createGain(); d.delayTime.value = .28; fb.gain.value = .35; w.gain.value = .5; d.connect(fb); fb.connect(d); d.connect(w); w.connect(MG); FX = d; }
+  return FX;
+}
+function voice(f, d, type, v, when, o) {
+  if (!AC || muted) return; o = o || {};
+  const t = AC.currentTime + when, os = AC.createOscillator(), g = AC.createGain(); os.type = type; os.frequency.setValueAtTime(f, t);
+  if (o.f2) os.frequency.exponentialRampToValueAtTime(o.f2, t + d * .8); if (o.det) os.detune.value = o.det;
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + (o.att || .005)); g.gain.exponentialRampToValueAtTime(.001, t + d);
+  let n = os;
+  if (o.cut) { const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(o.cut, t); if (o.sweep) fl.frequency.exponentialRampToValueAtTime(o.sweep, t + d); os.connect(fl); n = fl; }
+  n.connect(g); g.connect(MG); if (o.fx) g.connect(fxOut()); os.start(t); os.stop(t + d + .03);
+}
+function lead(kind, f, w, v) {
+  switch (kind) {
+    case 'bell': voice(f, .9, 'sine', v, w, { fx: 1 }); voice(f * 2.01, .5, 'sine', v * .4, w, { fx: 1 }); voice(f * 3, .2, 'sine', v * .15, w); break;
+    case 'ep': voice(f, .5, 'triangle', v * 1.2, w, { fx: 1 }); voice(f * 2, .25, 'sine', v * .3, w); break;
+    case 'sq': voice(f, .16, 'square', v * .5, w, { cut: 2600, fx: 1 }); break;
+    case 'saw': voice(f, .4, 'sawtooth', v * .5, w, { cut: 1800, sweep: 500, fx: 1, det: -9 }); voice(f, .4, 'sawtooth', v * .5, w, { cut: 1800, sweep: 500, det: 9 }); break;
+    case 'pluck': voice(f, .45, 'sawtooth', v * .7, w, { cut: 3000, sweep: 300, fx: 1 }); break;
+    case 'cow': voice(f, .22, 'square', v * .5, w, { cut: 3500, fx: 1 }); voice(f * 1.48, .22, 'square', v * .4, w, { cut: 3500 }); break;
+  }
+}
 function music() {
   if (!AC || muted || !S || mode === 'menu' || mode === 'pause' || mode === 'end') return;
-  const th = CH[Math.min(S.ch, CH.length - 1)].th, sp = 60 / th.bpm / 4, hot = mode === 'fight';
+  const ch = Math.min(S.ch, MUS.length - 1), m = MUS[ch]; if (mCh !== ch) { mCh = ch; mMel = mkMel(ch); mStep = 0; }
+  const sp = 60 / m.bpm / 4, hot = mode === 'fight' && !!fs && !fs.done, boss = hot && !!fs.boss;
   if (mNext < AC.currentTime) mNext = AC.currentTime + .05;
   while (mNext < AC.currentTime + .25) {
-    const w = mNext - AC.currentTime, s = mStep % 32;
-    if (s in BASS) { const f = midi(th.root + BASS[s]); tone(f, .42, 'sine', hot ? .34 : .2, f * .55, w); }
+    const s = mStep % 16, bar = mStep / 16 | 0, s64 = mStep % 64, w = mNext - AC.currentTime + (m.swing && s % 2 ? sp * m.swing * 2 : 0);
+    const pd = m.prog[bar % 4], nf = d => { const q = pd + d; return midi(m.root + m.sc[((q % 7) + 7) % 7] + 12 * Math.floor(q / 7)); };
+    if (s === 0) for (const d of [0, 2, 4]) voice(nf(d) * 2, sp * 16, 'sawtooth', m.dark ? .035 : .028, w, { cut: m.dark ? 500 : 800, att: .3, det: d * 4 });
+    const dg = mMel[s64]; if (dg != null && (hot || s64 % 2 === 0 || m.arp)) lead(m.lead, nf(dg) * 4 * (boss && s64 % 8 === 4 ? 2 : 1), w, hot ? .11 : .08);
+    if (m.crackle && Math.random() < .3) noise(.02, .015, 5000, w);
     if (hot) {
-      if (s % 8 === 0 || s === 11 || s === 27) tone(150, .1, 'sine', .3, 40, w);
-      if (s % 16 === 8) noise(.12, .13, 1600, w);
-      if (s % 2 === 0 || s > 27) noise(.03, .05, 7000, w);
-    } else if (s % 8 === 4) noise(.03, .03, 7000, w);
+      if (m.k.includes(s)) tone(150, .11, 'sine', .34, 40, w);
+      if (m.bass.includes(s)) { const f = nf(0); voice(f, sp * (m.slide ? 5 : 3.5), m.dist ? 'triangle' : 'sine', m.dist ? .36 : .3, w, { f2: m.slide && s === m.bass[m.bass.length - 1] ? f * 1.5 : f * .97, att: .01 }); }
+      if (m.s.includes(s)) { noise(m.dark ? .22 : .12, .13, 1500, w); tone(190, .08, 'triangle', .1, 120, w); }
+      if (m.hat === 'drill' ? [0, 3, 6, 8, 11, 14].includes(s) : s % m.hat === 0) noise(.03, .045, 7500, w);
+      if (m.hat !== 4 && bar % 4 === 3 && s >= 12) noise(.02, .04, 8000, w + sp * .5);
+      if (boss && s % 4 === 2) noise(.05, .05, 4000, w);
+    } else {
+      if (s % 8 === 4) noise(.03, .025, 7500, w);
+      if (s === 0 && bar % 2 === 0) voice(nf(0), sp * 12, 'sine', .14, w, { att: .05 });
+    }
     mNext += sp; mStep++;
   }
 }
@@ -82,17 +138,18 @@ const K = {}, M = { x: W / 2, y: H / 2, l: false, r: false };
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } };
 const sk = id => !!S.sk[id];
-const maxHp = () => 100 + 20 * S.st.hp + (S.hpB || 0);
-const dmgMul = w => (1 + .08 * S.st.str) * (w ? 1 + .2 * (S.wl[w] - 1) : 1) * (P.rage > 0 ? 1.6 : 1) * (P.buff > 0 ? 1.3 : 1);
+const has = id => !!(S.trk && S.trk.eq.includes(id));
+const maxHp = () => 100 + 20 * S.st.hp + (S.hpB || 0) + (has('beanie') ? 25 : 0);
+const dmgMul = w => (1 + .08 * S.st.str) * (w ? 1 + .2 * (S.wl[w] - 1) : 1) * (P.rage > 0 ? 1.5 : 1) * (P.buff > 0 ? 1.3 : 1) * (has('tape') && P.hp < maxHp() * .3 ? 1.4 : 1);
 
 function toast(msg, d) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; toastT = d || 3.5; }
 
 function newGame(diff) {
-  S = { ch: 0, step: 0, xp: 0, tapes: 0, wl: { bat: 1, mic: 0, vinyl: 0 }, sk: {}, st: { hp: 0, str: 0, swag: 0 }, comp: 0, diff, weapon: 'bat', q: {}, done: {}, hpB: 0 };
+  S = { ch: 0, step: 0, xp: 0, tapes: 0, wl: { bat: 1, mic: 0, vinyl: 0 }, sk: {}, st: { hp: 0, str: 0, swag: 0 }, comp: 0, diff, weapon: 'bat', q: {}, done: {}, hpB: 0, trk: { owned: {}, eq: [] } };
   begin();
 }
 function begin() {
-  S.q = S.q || {}; S.done = S.done || {}; S.hpB = S.hpB || 0;
+  S.q = S.q || {}; S.done = S.done || {}; S.hpB = S.hpB || 0; S.trk = S.trk || { owned: {}, eq: [] };
   P = { x: AW / 2, y: AH / 2, r: 17, hp: maxHp(), aim: 0, atk: null, acd: 0, combo: 0, lastAtk: -9, acount: 0, dodge: 0, dcd: 0, dvx: 0, dvy: 0, post: 0, inv: 0,
     block: false, blockT: 0, swag: 0, rage: 0, buff: 0, spin: 0, spinT: 0, qcd: 0, rcd: { bat: 0, mic: 0, vinyl: 0 } };
   comp.x = P.x - 40; comp.y = P.y + 30; shownTitle = -1;
@@ -138,7 +195,8 @@ function reward(rw, title) {
   if (rw.xp) { S.xp += rw.xp; a.push('▶ ' + rw.xp); }
   if (rw.tapes) { S.tapes += rw.tapes; a.push('▣ ' + rw.tapes + ' мастер-лент'); }
   if (rw.hp) { S.hpB += rw.hp; P.hp += rw.hp; a.push('+' + rw.hp + ' к макс. здоровью'); }
-  toast(title + ':  ' + a.join('  ·  '), 4.5); sfx.buy(); save();
+  if (rw.item) { S.trk.owned[rw.item] = 1; if (S.trk.eq.length < 3) S.trk.eq.push(rw.item); a.push('цацка «' + TRK[rw.item].n + '» (TAB — надеть/снять)'); }
+  toast(title + ':  ' + a.join('  ·  '), 5); sfx.buy(); save();
 }
 function startEnc(room, waves, bossId, cb) {
   fs = { room, waves, i: 0, boss: null, done: false, clearT: 0, cb }; ens = []; prj = []; haz = [];
@@ -209,7 +267,7 @@ function doFinish(e) {
   if (fs) { P.x = RX(P.x, P.r); P.y = RY(P.y, P.r); }
   P.aim = a + Math.PI; P.inv = Math.max(P.inv, .9); P.atk = null; slowmo = .7; shake = 18; flash = .25; sfx.boom(); sfx.hit(true);
   burst(e.x, e.y, '#ffe14a', 40); ring(e.x, e.y, 150, '#ffe14a'); float(e.x, e.y - e.r - 40, 'ДОБИВАНИЕ', '#ffe14a', 1);
-  P.hp = Math.min(maxHp(), P.hp + maxHp() * .08); P.swag = Math.min(100, P.swag + 15);
+  P.hp = Math.min(maxHp(), P.hp + maxHp() * (has('pin') ? .09 : .045)); P.swag = Math.min(100, P.swag + 15);
   e.fin = false; e.sm = 0;
   if (e.boss) { e.stun = .6; dmgE(e, e.maxhp * .08, { heavy: true }); e.sm = 0; }
   else { e.xp = Math.round(e.xp * 1.5); e.hp = 0; kill(e, {}); }
@@ -260,11 +318,12 @@ function edgePos() {
   return { x: fs.room.cx, y: fs.room.cy };
 }
 function mkEnemy(type, x, y) {
-  const d = EN[type], sc = 1 + S.ch * .2;
-  return { type, d, ai: d.ai, x, y, r: d.r, hp: d.hp * sc, maxhp: d.hp * sc, dmg: d.dmg * (1 + S.ch * .12), spd: d.spd * rnd(.9, 1.1), c: d.c,
-    state: 'idle', t: 0, cdT: rnd(.6, 2), aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: .7, fl: 0, xp: Math.round(d.xp * (1 + S.ch * .15)), rng: d.rng || 50 };
+  const d = EN[type], sc = 1 + S.ch * .28;
+  return { type, d, ai: d.ai, x, y, r: d.r, hp: d.hp * sc, maxhp: d.hp * sc, dmg: d.dmg * (1 + S.ch * .18), spd: d.spd * rnd(.9, 1.1) * (1 + S.ch * .02), c: d.c,
+    state: 'idle', t: 0, cdT: rnd(.6, 2), aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: .7, fl: 0, xp: Math.round(d.xp * .42 * (1 + S.ch * .15)), rng: d.rng || 50 };
 }
 function spawnWave() {
+  if (S.ch >= 2 && fs.room.kind === 'fight') for (let i = 0, N = 1 + (S.ch / 3 | 0); i < N; i++) { const p = edgePos(); ens.push(mkEnemy('mod', p.x, p.y)); }
   for (const [type, n, el] of fs.waves[fs.i]) {
     const N = el ? n : Math.ceil(n * (EN[type].ai === 'ranged' ? 2 : 1.6));
     for (let i = 0; i < N; i++) { const p = edgePos(), m = mkEnemy(type, p.x, p.y); if (el) { m.hp = m.maxhp = m.hp * 2.6; m.dmg *= 1.3; m.r *= 1.3; m.xp *= 4; m.el = 1; } ens.push(m); }
@@ -272,22 +331,49 @@ function spawnWave() {
 }
 function spawnBoss(id) {
   const d = BOSS[id];
-  const b = { type: id, d, boss: true, ai: 'boss', x: fs.room.cx, y: fs.room.cy - fs.room.h * .3, r: d.r, hp: d.hp, maxhp: d.hp, dmg: d.dmg, spd: d.spd, c: d.c,
-    state: 'idle', t: 0, cdT: 1.6, aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: 1.2, fl: 0, xp: d.xp, ph: 0, mv: '', last: '', spiral: null, say: '', sayT: 0, tx: 0, ty: 0 };
+  const b = { type: id, d, boss: true, ai: 'boss', x: fs.room.cx, y: fs.room.cy - fs.room.h * .3, r: d.r, hp: d.hp * 1.3, maxhp: d.hp * 1.3, dmg: d.dmg * 1.12, spd: d.spd, c: d.c,
+    state: 'idle', t: 0, cdT: 1.6, aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: 1.2, fl: 0, xp: Math.round(d.xp * .6), ph: 0, mv: '', last: '', spiral: null, say: '', sayT: 0, tx: 0, ty: 0 };
   ens.push(b); fs.boss = b;
 }
 
 /* ================= БОЙ: ИГРОК ================= */
-function tryAtk(heavy) {
+function tryAtk(heavy, c) {
   if (P.atk || P.acd > 0 || P.dodge > 0 || P.spin > 0) return;
   const w = S.weapon, d = WP[w][heavy ? 'heavy' : 'light'];
   if (!heavy) P.combo = (T - P.lastAtk < .8) ? P.combo + 1 : 1; else P.combo = 0;
   P.lastAtk = T; P.acount++;
-  P.atk = { w, heavy, t: 0, wind: d.wind, dur: d.dur, cd: d.cd, done: false, a: P.aim, combo: P.combo, post: P.post > 0, n: P.acount };
+  const full = heavy && c >= .95, sw = P.swT > 0, crit = P.crit > 0;
+  P.atk = { w, heavy, c: c || 0, full, sw, crit, t: 0, wind: d.wind, dur: d.dur, cd: d.cd, done: false, a: P.aim, combo: P.combo, post: P.post > 0, n: P.acount };
+  if (sw) { P.swT = 0; float(P.x, P.y - 48, 'СВИТЧ', WP[w].col); }
+  if (crit) P.crit = 0;
+  if (full) { float(P.x, P.y - 62, 'ПОЛНЫЙ ЗАРЯД', '#ffffff', 1); shake = Math.max(shake, 6); }
   P.post = 0; sfx.swing();
 }
+function swW(w) { if (!S.wl[w] || S.weapon === w) return; S.weapon = w; P.atk = null; P.chg = 0; P.swT = 1.2; }
+function react(e, dmg, o) {
+  const rm = has('ring') ? 1.5 : 1, tx = (s, c) => float(e.x, e.y - e.r - 46, s, c, 1);
+  if (o.w === 'bat') {
+    if (e.shock > 0) {
+      e.shock = 0; tx('ВЗРЫВ НИЗОВ', '#ff5a2a'); const R = sk('b7') ? 190 : 125, ad = dmg * (sk('b7') ? .9 : .6) * rm; ring(e.x, e.y, R, '#49e0ff'); sfx.boom(); shake = Math.max(shake, 8);
+      timers.push({ t: .01, f: () => { for (const q of ens) if (q !== e && !q.dead && dist(q, e) < R + q.r) dmgE(q, ad, { kb: 260, stun: sk('b7') ? .8 : 0 }); } }); dmg *= 1.3 * rm;
+    } else if (e.pitch > 0) { e.pitch = 0; tx('РАСКОЛ', '#e9e2ff'); dmg *= 1.6 * rm; o.stun = Math.max(o.stun || 0, 1); }
+  } else if (o.w === 'mic') {
+    if (e.pitch > 0) { e.pitch = 0; tx('ЗАМЫКАНИЕ', '#49e0ff'); dmg *= 1.3 * rm; o.stun = Math.max(o.stun || 0, 1.2); }
+    e.shock = sk('m7') ? 7 : 3.5;
+  } else if (o.w === 'vinyl') {
+    if (e.shock > 0) {
+      e.shock = 0; tx('ИСКРА', '#ffe14a'); dmg *= 1.5 * rm; const ad = dmg * .5;
+      ens.filter(q => q !== e && !q.dead && q.spawn <= 0 && dist(q, e) < 260).sort((p, q) => dist(p, e) - dist(q, e)).slice(0, sk('v7') ? 3 : 1)
+        .forEach(q => { bolts.push({ x1: e.x, y1: e.y, x2: q.x, y2: q.y, l: .2, c: '#ffe14a' }); timers.push({ t: .01, f: () => dmgE(q, ad, {}) }); });
+    }
+    e.pitch = sk('v6') ? 5 : 3;
+  }
+  return dmg;
+}
 function doHit(a, em) {
-  const w = a.w, d = WP[w][a.heavy ? 'heavy' : 'light'], base = d.dmg * dmgMul(w) * (em || 1);
+  const w = a.w, d = WP[w][a.heavy ? 'heavy' : 'light'], fin3 = !a.heavy && a.combo % 3 === 0;
+  let base = d.dmg * dmgMul(w) * (em || 1) * (fin3 ? 1.45 : 1) * (a.heavy ? (1 + 1.3 * (a.c > .3 ? a.c : 0)) * (has('chain') ? 1.3 : 1) : 1) * (a.sw ? 1.35 : 1);
+  if (a.crit && !em) { base *= 2; float(P.x, P.y - 76, 'КРИТ ×2', '#ffffff', 1); }
   if (w === 'vinyl') {
     const n = a.heavy ? (sk('v2') ? 5 : 3) : (sk('v2') ? 2 : 1), spread = a.heavy ? .17 : .08;
     for (let i = 0; i < n; i++) shootP(a.a + (i - (n - 1) / 2) * spread, d.speed, base);
@@ -295,13 +381,13 @@ function doHit(a, em) {
   }
   let mult = 1, stun = 0, arc = d.arc, range = d.range;
   if (w === 'bat') {
-    if (!a.heavy && a.combo % 3 === 0 && sk('b2')) { mult = 2; stun = 1.3; float(P.x, P.y - 40, 'КОМБО 4/4', '#ffb03b', 1); }
+    if (fin3 && sk('b2')) { mult = 1.4; stun = 1.3; float(P.x, P.y - 40, 'КОМБО 4/4', '#ffb03b', 1); }
     if (a.post && sk('b3')) { mult *= 1.8; arc = TAU; range += 35; ring(P.x, P.y, range, '#ff5a2a'); float(P.x, P.y - 55, 'ДРОП!', '#ff5a2a', 1); }
   }
   if (w === 'mic' && a.heavy && sk('m1')) arc = TAU;
   const hit = [];
   for (const e of ens) { if (e.dead || e.spawn > 0) continue; if (dist(e, P) <= range + e.r && (arc >= TAU || adiff(ang(P, e), a.a) <= arc / 2)) hit.push(e); }
-  for (const e of hit) dmgE(e, base * mult, { w, kb: d.kb, stun, heavy: a.heavy });
+  for (const e of hit) dmgE(e, base * mult, { w, kb: d.kb * (fin3 ? 1.6 : 1), stun, heavy: a.heavy || fin3 && w === 'bat' });
   if (w === 'bat' && a.heavy && sk('b1')) {
     const cx = P.x + Math.cos(a.a) * range * .8, cy = P.y + Math.sin(a.a) * range * .8;
     ring(cx, cy, 145, '#ff5a2a'); sfx.boom(); shake = Math.max(shake, 9);
@@ -327,43 +413,52 @@ function mkP(x, y, an, speed, dmg, o) {
 }
 function dmgE(e, dmg, o) {
   if (e.dead || e.spawn > 0) return;
+  if (e.d.shield && o.w && !(e.brk > 0) && e.stun <= 0 && e.state !== 'rec' && e.state !== 'wind') {
+    if (o.heavy) { e.brk = 4; e.stun = 1.3; float(e.x, e.y - e.r - 30, 'ЩИТ СЛОМАН', '#7fa8ff', 1); sfx.parry(); }
+    else { float(e.x, e.y - e.r - 10, 'БЛОК', '#7fa8ff'); noise(.05, .12, 2500); e.sm = (e.sm || 0) + .04; return; }
+  }
+  if (o.w) dmg = react(e, dmg, o);
   if (o.w === 'bat' && e.stun > 0 && sk('b4')) dmg *= 1.5;
   e.hp -= dmg; e.fl = .1;
   e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .55 : 1.1) * (e.boss ? 2.2 : 1) + (o.sm || 0);
   if (e.sm >= 1 && !e.fin && e.hp > 0) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [F]', '#ffe14a', 1); }
   float(e.x + rnd(-10, 10), e.y - e.r - 6, Math.round(dmg), dmg > 60 ? '#ffd23b' : '#fff');
   burst(e.x, e.y, e.c, 4);
-  if (P.rage <= 0) P.swag = Math.min(100, P.swag + dmg * .1 * (1 + .25 * S.st.swag) * (o.w === 'mic' && sk('m4') ? 2 : 1));
-  else P.hp = Math.min(maxHp(), P.hp + dmg * .04);
+  if (P.rage <= 0) P.swag = Math.min(100, P.swag + dmg * .08 * (has('energy') ? 1.4 : 1) * (1 + .25 * S.st.swag) * (o.w === 'mic' && sk('m4') ? 2 : 1));
+  else P.hp = Math.min(maxHp(), P.hp + dmg * .02);
   if (!e.boss) {
     if (o.kb) { const an = ang(P, e); e.kx += Math.cos(an) * o.kb; e.ky += Math.sin(an) * o.kb; }
-    if ((e.ai !== 'brute' || o.heavy) && e.state !== 'dash') { e.state = 'hurt'; e.t = .22; }
+    if ((o.heavy || (e.ai !== 'brute' && !(e.poi > 0))) && e.state !== 'dash') { e.state = 'hurt'; e.t = .22; if (!o.heavy) e.poi = 1.2; }
     if (o.stun) e.stun = Math.max(e.stun, o.stun);
     if (o.slow) e.slow = o.slow;
   } else if (o.stun) e.stun = Math.max(e.stun, o.stun * .35);
   if (e.hp <= 0) kill(e, o);
 }
 function kill(e, o) {
-  e.dead = true; S.xp += e.xp;
+  e.dead = true; if (has('flash')) e.xp = Math.round(e.xp * 1.3); S.xp += e.xp;
   for (const id in S.q) { const q = S.q[id], n = NPCS[id]; if (q.st === 1 && n.q.type === 'kill' && n.q.t === e.type && q.n < n.q.n) { q.n++; if (q.n >= n.q.n) toast('Услуга готова: вернись к ' + n.n, 4); } } float(e.x, e.y - e.r - 24, '+' + e.xp + ' ▶', '#7dff7d');
   burst(e.x, e.y, e.c, e.boss ? 80 : 14);
-  if (o && o.w === 'bat' && sk('b6')) P.hp = Math.min(maxHp(), P.hp + maxHp() * .06);
+  if (o && o.w === 'bat' && sk('b6')) P.hp = Math.min(maxHp(), P.hp + maxHp() * .03);
   if (e.boss) {
     for (const q of ens) if (q !== e) { q.dead = true; burst(q.x, q.y, q.c, 8); }
     prj = []; haz = []; slowmo = 1.6; shake = 22; sfx.boom(); flash = .5;
-  } else if (Math.random() < .15) orbs.push({ x: e.x, y: e.y, l: 12 });
+  } else if (Math.random() < .1) orbs.push({ x: e.x, y: e.y, l: 12 });
 }
 function hurtP(dmg, src, isProj) {
-  if (P.inv > 0 || mode !== 'fight' || !fs || fs.done) return false;
+  if (mode !== 'fight' || !fs || fs.done) return false;
+  if (P.inv > 0) {
+    if (P.dodge > 0 && !(P.pdT > 0)) { P.pdT = 1.5; P.crit = 3; slowmo = Math.max(slowmo, .5); P.swag = Math.min(100, P.swag + 8); float(P.x, P.y - 60, 'ТАЙМИНГ!', '#ffffff', 1); sfx.parry(); }
+    return false;
+  }
   if (P.block) {
-    if (P.blockT < .24) {
+    if (P.blockT < .2) {
       sfx.parry(); P.swag = Math.min(100, P.swag + 12); P.inv = .25; float(P.x, P.y - 40, 'ПАРИРОВАНИЕ', '#49e0ff', 1); ring(P.x, P.y, 60, '#49e0ff');
-      if (src && !isProj) { src.sm = (src.sm || 0) + .5; src.stun = src.boss ? .9 : 1.8; if (!src.boss) src.state = 'idle'; }
+      if (src && !isProj) { src.sm = (src.sm || 0) + .5; src.stun = (src.boss ? .9 : 1.4) * (has('grillz') ? 1.6 : 1); if (!src.boss) src.state = 'idle'; }
       return 'parry';
     }
-    dmg *= .25; sfx.block();
+    dmg *= .4; sfx.block();
   } else sfx.hurt();
-  dmg *= [.6, 1, 1.5][S.diff]; if (P.rage > 0) dmg *= .5;
+  dmg *= [.6, 1, 1.5][S.diff]; if (P.rage > 0) dmg *= .65;
   P.hp -= dmg; P.inv = .4; shake = Math.max(shake, 10); flash = .25;
   float(P.x, P.y - 30, '-' + Math.round(dmg), '#ff4040');
   if (P.hp <= 0) die();
@@ -377,7 +472,7 @@ function retry() { show('dead', false); const sw = P.swag; S = load() || S; P.hp
 function doRune() {
   const w = S.weapon, id = { bat: 'b5', mic: 'm5', vinyl: 'v5' }[w];
   if (!sk(id) || P.rcd[w] > 0 || P.atk || P.dodge > 0) return;
-  P.rcd[w] = WP[w].rune.cd; float(P.x, P.y - 50, WP[w].rune.name, WP[w].col, 1);
+  P.rcd[w] = WP[w].rune.cd * (has('cart') ? .7 : 1); float(P.x, P.y - 50, WP[w].rune.name, WP[w].col, 1);
   if (w === 'bat') {
     ring(P.x, P.y, 270, '#ff5a2a'); ring(P.x, P.y, 180, '#ffb03b'); sfx.boom(); shake = 18; P.inv = Math.max(P.inv, .4);
     for (const e of ens) if (!e.dead && dist(e, P) < 270 + e.r) dmgE(e, 95 * dmgMul(w), { w, kb: 600, stun: 1.8, heavy: true });
@@ -386,11 +481,11 @@ function doRune() {
 }
 function doQ() {
   if (S.comp < 1 || P.qcd > 0) return;
-  P.qcd = S.comp >= 4 ? 5 : 8;
+  P.qcd = (S.comp >= 4 ? 6 : 9) * (has('sim') ? .7 : 1);
   comp.say = ['ЭЙ!', 'ПОЕХАЛИ!', 'КАТЮХА!', 'sexyswag!'][Math.floor(rnd(0, S.comp))]; comp.sayT = 1.3;
   sfx.adlib(); ring(comp.x, comp.y, 120, '#5cd0ff');
   const near = ens.filter(e => !e.dead && e.spawn <= 0).sort((a, b) => dist(a, P) - dist(b, P));
-  near.slice(0, 3).forEach(e => { bolts.push({ x1: comp.x, y1: comp.y, x2: e.x, y2: e.y, l: .25, c: '#5cd0ff' }); dmgE(e, 15 * dmgMul(), { stun: 2.2, sm: .5 }); });
+  near.slice(0, 3).forEach(e => { bolts.push({ x1: comp.x, y1: comp.y, x2: e.x, y2: e.y, l: .25, c: '#5cd0ff' }); dmgE(e, 15 * dmgMul(), { stun: 1.6, sm: .5 }); });
   if (S.comp >= 2) P.buff = 5;
   if (S.comp >= 3) near.slice(0, 7).forEach((e, i) => haz.push({ x: e.x, y: e.y, r: 78, t: .5 + i * .12, mt: .5 + i * .12, dmg: 45 * (1 + S.ch * .15), pl: 1, col: '#5cd0ff' }));
   if (S.comp >= 4) P.swag = Math.min(100, P.swag + 30);
@@ -401,28 +496,32 @@ function doDodge() {
   let mx = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0), my = (K.KeyS ? 1 : 0) - (K.KeyW ? 1 : 0);
   if (!mx && !my) { mx = Math.cos(P.aim); my = Math.sin(P.aim); }
   const l = Math.hypot(mx, my); P.dvx = mx / l * 700; P.dvy = my / l * 700;
-  P.dodge = .22; P.dcd = .55; P.inv = Math.max(P.inv, .32); P.atk = null; noise(.1, .08, 3000);
+  P.dodge = .22; P.dcd = .65; P.inv = Math.max(P.inv, has('pods') ? .38 : .27); P.atk = null; P.chg = 0; P.dn = (P.dn || 0) + 1; noise(.1, .08, 3000);
 }
 
 function updPlayer(dt) {
   let mx = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0), my = (K.KeyS ? 1 : 0) - (K.KeyW ? 1 : 0);
   const ml = Math.hypot(mx, my); if (ml) { mx /= ml; my /= ml; }
-  const ox = P.x, oy = P.y;
+  const ox = P.x, oy = P.y; P.mv = ml > 0;
   { const ap = aimPoint(); P.aim = Math.atan2(ap.y - P.y, ap.x - P.x); }
   P.block = !!(K.ShiftLeft || K.ShiftRight) && !P.atk && P.dodge <= 0 && P.spin <= 0;
   if (P.block) P.blockT += dt; else P.blockT = 0;
-  let sp = 255 * (P.buff > 0 ? 1.3 : 1) * (P.rage > 0 ? 1.2 : 1);
+  let sp = 255 * (has('kicks') ? 1.12 : 1) * (P.chg > .15 ? .5 : 1) * (P.buff > 0 ? 1.3 : 1) * (P.rage > 0 ? 1.2 : 1);
   if (P.block) sp *= .4; if (P.atk) sp *= P.atk.heavy ? .25 : .55;
   if (P.dodge > 0) { P.dodge -= dt; P.x += P.dvx * dt; P.y += P.dvy * dt; if (P.dodge <= 0) P.post = .4; }
   else { P.x += mx * sp * dt; P.y += my * sp * dt; }
-  for (const k of ['dcd', 'inv', 'acd', 'post', 'buff', 'qcd']) if (P[k] > 0) P[k] -= dt;
+  for (const k of ['dcd', 'inv', 'acd', 'post', 'buff', 'qcd', 'pdT', 'crit', 'swT']) if (P[k] > 0) P[k] -= dt;
   for (const w in P.rcd) if (P.rcd[w] > 0) P.rcd[w] -= dt;
   if (P.rage > 0) { P.rage -= dt; if (Math.random() < .5) pts.push({ x: P.x + rnd(-14, 14), y: P.y + rnd(-14, 14), vx: rnd(-30, 30), vy: rnd(-120, -40), l: .4, c: '#ff4a1c', s: 4 }); }
   if (P.spin > 0) {
     P.spin -= dt; P.spinT -= dt;
     if (P.spinT <= 0) { P.spinT = .15; for (const e of ens) if (!e.dead && dist(e, P) < 160 + e.r) dmgE(e, 13 * dmgMul('mic'), { w: 'mic', kb: 60 }); sfx.swing(); }
   }
-  if (!P.block) { if (M.l) tryAtk(false); else if (M.r) tryAtk(true); }
+  if (!P.block && P.spin <= 0) {
+    if (M.r && !P.atk && P.dodge <= 0) { P.chg = Math.min(1, (P.chg || 0) + dt * 1.2); if (P.chg >= 1 && !P.chgF) { P.chgF = 1; sfx.parry(); } }
+    else if (P.chg > 0) { const c = P.chg; P.chg = 0; P.chgF = 0; if (!P.atk) tryAtk(true, c); }
+    else if (M.l) tryAtk(false);
+  } else { P.chg = 0; P.chgF = 0; }
   if (P.atk) {
     const a = P.atk; a.t += dt;
     if (!a.done && a.t >= a.wind) { a.done = true; doHit(a); }
@@ -441,12 +540,14 @@ function moveE(e, an, sp, dt) { e.x += Math.cos(an) * sp * dt; e.y += Math.sin(a
 function updEnemy(e, dt) {
   if (e.fl > 0) e.fl -= dt;
   if (e.spawn > 0) { e.spawn -= dt; return; }
+  if (e.shock > 0) { e.shock -= dt; if (sk('m7')) { e.hp -= 9 * dt * (1 + S.ch * .2); if (e.hp <= 0) { kill(e, {}); return; } } }
+  if (e.pitch > 0) e.pitch -= dt; if (e.poi > 0) e.poi -= dt; if (e.brk > 0) e.brk -= dt;
   e.x += e.kx * dt; e.y += e.ky * dt; const fr = Math.pow(.004, dt); e.kx *= fr; e.ky *= fr;
   e.x = RX(e.x, e.r); e.y = RY(e.y, e.r);
   if (e.slow > 0) e.slow -= dt;
   if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0 && e.fin) { e.fin = false; e.sm = 0; } return; }
   if (e.boss) return updBoss(e, dt);
-  const sp = e.spd * (e.slow > 0 ? .5 : 1), d = dist(e, P), a = ang(e, P);
+  const sp = e.spd * (e.pitch > 0 ? (sk('v6') ? .45 : .7) : 1), agg = Math.max(.7, 1 - S.ch * .03), d = dist(e, P), a = ang(e, P);
   switch (e.state) {
     case 'hurt': case 'rec': e.t -= dt; if (e.t <= 0) e.state = 'idle'; return;
     case 'wind':
@@ -461,11 +562,11 @@ function updEnemy(e, dt) {
   switch (e.ai) {
     case 'melee': case 'brute':
       if (d > e.rng * .75 + P.r) moveE(e, a, sp, dt);
-      else { e.state = 'wind'; e.t = e.d.wind; e.aa = a; }
+      else { e.state = 'wind'; e.t = e.d.wind * agg; e.aa = a; }
       break;
     case 'ranged':
       if (d < 230) moveE(e, a + Math.PI, sp, dt); else if (d > 420) moveE(e, a, sp, dt); else moveE(e, a + Math.PI / 2, sp * .4, dt);
-      if (e.cdT <= 0 && d < 620) { e.state = 'wind'; e.t = .3; e.cdT = e.d.cd * rnd(.8, 1.15); }
+      if (e.cdT <= 0 && d < 620) { e.state = 'wind'; e.t = .3; e.cdT = e.d.cd * rnd(.8, 1.15) * agg; }
       break;
     case 'charger':
       if (d > 340) moveE(e, a, sp, dt); else if (e.cdT <= 0) { e.state = 'wind'; e.t = .65; e.aa = a; e.cdT = 2.4; } else moveE(e, a + Math.PI / 2, sp * .6, dt);
@@ -632,7 +733,7 @@ function update(dt) {
   for (const o of orbs) {
     o.l -= dt; const d = dist(o, P);
     if (d < 130) { const a = ang(o, P); o.x += Math.cos(a) * 320 * dt; o.y += Math.sin(a) * 320 * dt; }
-    if (d < 28) { o.l = 0; P.hp = Math.min(maxHp(), P.hp + maxHp() * .12); sfx.pick(); float(P.x, P.y - 30, '+HP', '#7dff7d'); }
+    if (d < 28) { o.l = 0; P.hp = Math.min(maxHp(), P.hp + maxHp() * .1); sfx.pick(); float(P.x, P.y - 30, '+HP', '#7dff7d'); }
   }
   orbs = orbs.filter(o => o.l > 0);
   ens = ens.filter(e => !e.dead);
@@ -647,7 +748,7 @@ function update(dt) {
 }
 
 /* ================= ОТРИСОВКА (3D, Three.js) ================= */
-const EMO = { bot: '🤖', hater: '💬', clipper: '✂️', troll: '👹', ghost: '👻', lawyer: '📄', farmer: '📱',
+const EMO = { bot: '🤖', mod: '🛡️', hater: '💬', clipper: '✂️', troll: '👹', ghost: '👻', lawyer: '📄', farmer: '📱',
   courier: '📦', golem: '🥁', hype: '🔥', dislike: '👎', major: '💼', strike: '⛔', botlord: '🖥️', ghostv: '🎧', algo: '👁️' };
 const T3 = window.THREE;
 let R3 = null, SC, CAM, SUN, worldG = null, builtDeco = null, PM, PIN, WPV, WG = {}, SHIELD, pBodyMat, CM, emesh = [], stamp = 0, spinners = [];
@@ -726,7 +827,7 @@ function wallTex(k) {
   return new T3.CanvasTexture(c);
 }
 function buildWorld(th) {
-  if (worldG) SC.remove(worldG); worldG = new T3.Group(); SC.add(worldG); spinners = [];
+  if (worldG) SC.remove(worldG); worldG = new T3.Group(); SC.add(worldG); spinners = []; statics = [];
   const bg = new T3.Color(th.bg); SC.background = bg; SC.fog = new T3.Fog(bg, 900, 2300);
   const pl = (r, c, y) => { const q = new T3.Mesh(G('pl', () => new T3.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), new T3.MeshStandardMaterial({ color: c, roughness: .92 })); q.scale.set(r.w, 1, r.h); q.position.set(r.x + r.w / 2, y, r.y + r.h / 2); q.receiveShadow = true; worldG.add(q); };
   pl({ x: -1500, y: -1500, w: LV.w + 3000, h: LV.h + 3000 }, bg.clone().multiplyScalar(.4), -3);
@@ -782,7 +883,9 @@ function buildWorld(th) {
     const g = new T3.Group();
     if (o.k === 'npc' || o.k === 'seva') {
       const c = o.k === 'seva' ? '#ffae3b' : NPCS[o.id].c;
-      g.add(cyl(13, 17, 36, c, 0, 18, 0), sph(9.5, '#e8c39e', 0, 44, 0), cyl(10, 10.5, 5, '#22242e', 0, 51, 0), box(9, 2, 14, '#22242e', 8, 49, 0), emo(o.k === 'seva' ? '🔧' : '🎤', 26, 80));
+      const mg = inst(o.k === 'seva' ? 'barb' : NPC_MODELS[(o.id.charCodeAt(0) + o.id.length * 3) % NPC_MODELS.length], 72, o.k === 'seva' ? { show: /Mug|Hat/, tint: '#ffae3b', mix: .3 } : { tint: c, mix: .45 });
+      if (mg) { g.add(mg, emo(o.k === 'seva' ? '🔧' : '🎤', 26, 100)); statics.push(mg); }
+      else g.add(cyl(13, 17, 36, c, 0, 18, 0), sph(9.5, '#e8c39e', 0, 44, 0), cyl(10, 10.5, 5, '#22242e', 0, 51, 0), box(9, 2, 14, '#22242e', 8, 49, 0), emo(o.k === 'seva' ? '🔧' : '🎤', 26, 80));
       if (o.k === 'seva') { const b = new T3.Group(); b.add(box(44, 26, 28, '#3a2718', 0, 13, 0), box(30, 2, 20, '#49e0ff', 0, 27, 0, { emissive: '#49e0ff', emissiveIntensity: .9 })); b.position.set(o.x, 0, o.y + 50); worldG.add(b); }
     } else if (o.k === 'chest') g.add(box(46, 26, 30, '#7a4a1e', 0, 13, 0), box(48, 8, 32, '#ffd23b', 0, 28, 0, { metalness: .7, roughness: .3, emissive: '#553a00', emissiveIntensity: .7 }), emo(o.loot.hp ? '💛' : o.loot.tapes ? '📀' : '🎁', 24, 58));
     else if (o.k === 'lore') g.add(emo('📼', 36, 30));
@@ -826,7 +929,60 @@ function drawNav() {
   X.fillStyle = '#ff3b3b'; X.beginPath(); X.arc(mx + P.x * k, my + P.y * k, 3.5, 0, TAU); X.fill();
   X.textAlign = 'left';
 }
+/* ---------- GLB-модели с анимациями (CC0: KayKit, Quaternius) ---------- */
+const MDL = {}, NPC_MODELS = ['barb', 'mage', 'knight', 'kent', 'skrog', 'vanek'];
+const MODEL_OF = { bot: 'robot', hater: 'skmage', clipper: 'skrog', troll: 'skwar', ghost: 'skmin', lawyer: 'knight', farmer: 'mage', mod: 'knight',
+  courier: 'kent', golem: 'robot', hype: 'mage', dislike: 'skwar', major: 'knight', strike: 'skwar', botlord: 'robot', ghostv: 'vanek' };
+const MODEL_OPT = { hater: { tint: '#ff7070', mix: .4 }, clipper: { tint: '#ff5cc8', mix: .45 }, troll: { tint: '#7fd04a', mix: .5 }, ghost: { tint: '#b79cff', mix: .6, op: .6, emi: .3 },
+  farmer: { tint: '#ffd23b', mix: .5 }, mod: { show: /Rectangle_Shield/, tint: '#7fa8ff', mix: .5 }, ghostv: { tint: '#ff8080', mix: .6, op: .78, emi: .35 } };
+const HIDE = /Offhand|Shield|Crossbow|Knife|Throwable|Sword|Axe|Mug|Spellbook|Wand|Staff|Cape|Cloak/i;
+const ANIM = { idle: ['Idle'], run: ['Running_A', 'Running'], atk: ['1H_Melee_Attack_Slice_Horizontal', 'Punch'], atk2: ['1H_Melee_Attack_Chop', 'Punch'], heavy: ['2H_Melee_Attack_Chop', 'Punch'],
+  spin: ['2H_Melee_Attack_Spin', 'Dance'], hit: ['Hit_A', 'No'], death: ['Death_A', 'Death'], dodge: ['Dodge_Forward', 'Jump'], block: ['Blocking', 'Idle'], cast: ['Spellcast_Shoot', 'Wave'],
+  thr: ['Throw', 'Punch'], cheer: ['Cheer', 'ThumbsUp'] };
+let corpses = [], statics = [], lastNow = 0;
+function loadModels() {
+  if (!T3 || !T3.GLTFLoader || !T3.SkeletonUtils || !window.GLB) return;
+  const ld = new T3.GLTFLoader();
+  for (const k in window.GLB) {
+    try {
+      const bs = atob(window.GLB[k]), u = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++) u[i] = bs.charCodeAt(i);
+      ld.parse(u.buffer, '', g => { const bb = new T3.Box3().setFromObject(g.scene); MDL[k] = { scene: g.scene, clips: g.animations, h: (bb.max.y - bb.min.y) || 1, y0: bb.min.y }; builtDeco = null; }, () => {});
+    } catch (e) { /* модель не загрузилась — останутся фигуры из примитивов */ }
+    window.GLB[k] = null;
+  }
+}
+function play(g, key, once, dur, tok) {
+  const u = g.userData; if (!u || !u.mx) return; const id = key + (tok == null ? '' : tok); if (u.key === id) return; u.key = id;
+  let a = null; for (const n of ANIM[key]) if (u.acts[n]) { a = u.acts[n]; break; } if (!a) return;
+  a.reset(); a.setLoop(once ? T3.LoopOnce : T3.LoopRepeat, Infinity); a.clampWhenFinished = !!once; a.timeScale = dur ? a.getClip().duration / dur : 1; a.fadeIn(.1).play();
+  if (u.cur && u.cur !== a) u.cur.fadeOut(.1); u.cur = a;
+}
+function inst(name, height, o) {
+  const m = MDL[name]; if (!m) return null; o = o || {};
+  const g = new T3.Group(), s = T3.SkeletonUtils.clone(m.scene), k = height / m.h; s.rotation.y = Math.PI / 2; s.scale.setScalar(k); s.position.y = -m.y0 * k; g.add(s);
+  const tint = o.tint ? new T3.Color('#ffffff').lerp(new T3.Color(o.tint), o.mix == null ? .55 : o.mix) : null;
+  s.traverse(q => {
+    if (!q.isMesh) return; q.castShadow = true; q.frustumCulled = false;
+    if (HIDE.test(q.name) && !(o.show && o.show.test(q.name))) { q.visible = false; return; }
+    if (tint || o.op || o.emi) {
+      q.material = q.material.clone(); if (tint) q.material.color.multiply(tint);
+      if (o.op) { q.material.transparent = true; q.material.opacity = o.op; }
+      if (o.emi) { q.material.emissive = new T3.Color(o.tint || '#ffffff'); q.material.emissiveIntensity = o.emi; }
+    }
+  });
+  const mx = new T3.AnimationMixer(s), acts = {}; for (const c of m.clips) acts[c.name] = mx.clipAction(c);
+  g.userData = { mx, acts, key: '', cur: null, top: height, mdl: 1 }; play(g, 'idle'); return g;
+}
+function enemyModel(e) {
+  const mn = MODEL_OF[e.type]; if (!mn || !MDL[mn]) return null;
+  const H = e.r * (e.boss ? 3.6 : 4.3), o = Object.assign({}, e.boss && !MODEL_OPT[e.type] ? { tint: e.c, mix: .6, emi: .18 } : MODEL_OPT[e.type]);
+  if (e.el) { o.tint = '#ffd23b'; o.mix = .55; o.emi = .28; }
+  const g = inst(mn, H, o); g.add(emo(EMO[e.type] || '?', e.boss ? e.r * 1.1 : e.r * 1.4, H + e.r * .9)); g.userData.top = H; return g;
+}
+loadModels();
+
 function enemyMesh(e) {
+  const mg = enemyModel(e); if (mg) return mg;
   const r = e.r, c = e.c, g = new T3.Group(); let top = r * 3;
   const eyes = (y, col) => g.add(box(3, r * .2, r * .2, col, r * .5, y, r * .22, { emissive: col, emissiveIntensity: 1 }), box(3, r * .2, r * .2, col, r * .5, y, -r * .22, { emissive: col, emissiveIntensity: 1 }));
   switch (e.type) {
@@ -903,7 +1059,7 @@ function render() {
   X.setTransform(1, 0, 0, 1, 0, 0); X.clearRect(0, 0, W, H);
   if (!S || !P || !T3) return;
   if (!R3) init3d();
-  const th = CH[Math.min(S.ch, CH.length - 1)].th, now = performance.now() / 1000;
+  const th = CH[Math.min(S.ch, CH.length - 1)].th, now = performance.now() / 1000, fdt = Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
   if (builtDeco !== deco) { builtDeco = deco; buildWorld(th); }
   // камера
   if (Math.hypot(P.x - cam3.x, P.y - cam3.z) > 500) { cam3.x = P.x; cam3.z = P.y; }
@@ -917,8 +1073,17 @@ function render() {
   // Ванёк
   const w = S.weapon, wd = WP[w], a = P.atk;
   PM.position.set(P.x, 0, P.y); PM.rotation.y = -P.aim;
+  if (!PM.userData.mdl && MDL.vanek) { const q = inst('vanek', 72, { tint: '#4a4d5a', mix: .5 }); PIN.children.slice(0, 5).forEach(c => { c.visible = false; }); PIN.add(q); PM.userData.mdl = q; }
+  if (!CM.userData.mdl && MDL.kent) { const q = inst('kent', 62, { tint: '#bfe6ff', mix: .3 }); CM.children.forEach(c => { c.visible = false; }); CM.add(q); CM.userData.mdl = q; }
+  const pg = PM.userData.mdl;
+  if (pg) {
+    if (P.dodge > 0) play(pg, 'dodge', true, .32, P.dn); else if (P.block || P.chg > .15) play(pg, 'block'); else if (P.spin > 0) play(pg, 'spin', false, .5);
+    else if (a) play(pg, a.heavy ? 'heavy' : a.w === 'vinyl' ? 'thr' : a.combo % 2 ? 'atk' : 'atk2', true, a.dur * 1.6, a.n);
+    else if (mode === 'fight' && P.mv) play(pg, 'run'); else play(pg, 'idle');
+    pg.userData.mx.update(fdt);
+  }
   PM.visible = !(P.inv > 0 && P.inv < 1 && P.dodge <= 0 && Math.floor(now * 18) % 2);
-  if (P.dodge > 0) { PIN.rotation.z = -(1 - P.dodge / .22) * TAU; PIN.position.y = 14; PIN.scale.setScalar(.8); } else { PIN.rotation.z = 0; PIN.position.y = 0; PIN.scale.setScalar(1); }
+  if (P.dodge > 0 && !pg) { PIN.rotation.z = -(1 - P.dodge / .22) * TAU; PIN.position.y = 14; PIN.scale.setScalar(.8); } else { PIN.rotation.z = 0; PIN.position.y = 0; PIN.scale.setScalar(1); }
   pBodyMat.emissive.set(P.rage > 0 ? '#ff4a1c' : '#000000');
   for (const k in WG) WG[k].visible = k === w;
   let sw = .75;
@@ -933,7 +1098,13 @@ function render() {
   }
   if (P.spin > 0) dRing(P.x, P.y, 155, '#49e0ff', .8);
   if (P.rage > 0) dRing(P.x, P.y, 34 + Math.sin(now * 12) * 4, '#ff4a1c', .9);
-  CM.position.set(comp.x, Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = -P.aim;
+  { const cg = CM.userData.mdl, cmv = Math.hypot(comp.x - (comp.lx || 0), comp.y - (comp.ly || 0)) > .7; comp.lx = comp.x; comp.ly = comp.y;
+    CM.position.set(comp.x, cg ? 0 : Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = -P.aim;
+    if (cg) { if (comp.sayT > 0) play(cg, 'cheer'); else play(cg, cmv ? 'run' : 'idle'); cg.userData.mx.update(fdt); } }
+  if (P.chg > .15) dRing(P.x, P.y, 30 + P.chg * 44, P.chg >= 1 ? '#ffffff' : wd.col, .9);
+  if (P.crit > 0) dRing(P.x, P.y, 26, '#ffffff', .5 + .4 * Math.sin(now * 16));
+  for (const q of statics) q.userData.mx.update(fdt);
+  corpses = corpses.filter(c => { c.t -= fdt; c.m.userData.mx.update(fdt); if (c.t < .5) c.m.position.y -= fdt * 60; if (c.t <= 0) { SC.remove(c.m); return false; } return true; });
 
   // враги
   stamp++;
@@ -946,12 +1117,23 @@ function render() {
     m.position.set(e.x, fly, e.y);
     m.rotation.y = -((e.state === 'wind' || e.state === 'dash') ? e.aa : ang(e, P));
     m.rotation.z = e.stun > 0 ? Math.sin(now * 22) * .14 : e.state === 'wind' && !e.boss ? -.18 : 0;
+    if (m.userData.mdl) {
+      const u = m.userData; m.rotation.z = 0; if (e.type !== 'ghost') m.position.y = 0;
+      if (e.state === 'wind' && u.ps !== 'wind') { u.wn = (u.wn || 0) + 1; u.wd = Math.max(.3, e.t); } u.ps = e.state;
+      const cast = e.ai === 'ranged' || e.ai === 'summon' || (e.boss && !['slam', 'leap', 'charge'].includes(e.mv));
+      if (e.spawn > 0) play(m, 'idle'); else if (e.stun > 0 || e.state === 'hurt') play(m, 'hit');
+      else if (e.state === 'wind') play(m, cast ? 'cast' : 'atk', true, u.wd * 1.7, u.wn); else if (e.state === 'dash' || e.state === 'idle') play(m, 'run');
+      u.mx.update(fdt);
+    }
+    if (e.shock > 0) dRing(e.x, e.y, e.r + 4, '#49e0ff', .5 + .4 * Math.sin(now * 30));
+    if (e.pitch > 0) dCirc(e.x, e.y, e.r + 6, '#e9e2ff', .25);
+    if (e.d.shield && !(e.brk > 0)) dSect(e.x, e.y, e.r + 16, ang(e, P), 2, '#7fa8ff', .5);
     if (m.userData.spin) m.userData.spin.rotation.y = now * 1.5;
     teleDecals(e);
     if (e.el) dRing(e.x, e.y, e.r + 9, '#ffd23b', .9);
     if (e.fin) dRing(e.x, e.y, e.r + 16 + Math.sin(now * 14) * 4, '#ffe14a', 1);
   }
-  emesh = emesh.filter(m => { if (m.userData.st !== stamp) { SC.remove(m); return false; } return true; });
+  emesh = emesh.filter(m => { if (m.userData.st !== stamp) { if (m.userData.mdl && corpses.length < 14) { play(m, 'death', true); m.rotation.z = 0; corpses.push({ m, t: 1.5 }); } else SC.remove(m); return false; } return true; });
 
   // зоны, сферы, снаряды, эффекты
   for (const h of haz) { const c = h.pl ? '#5cd0ff' : '#ff3030'; dCirc(h.x, h.y, h.r, c, .22); dRing(h.x, h.y, h.r, c, .9); dRing(h.x, h.y, h.r * clamp(1 - h.t / h.mt, 0, 1), '#ffffff', .7); }
@@ -985,13 +1167,13 @@ function render() {
     if (e.stun > 0) { X.font = '15px sans-serif'; X.fillStyle = '#ffe14a'; X.fillText('✦ ✦ ✦', q.x, q.y - 6); }
     if (e.boss && e.sayT > 0 && e.say) { X.globalAlpha = Math.min(1, e.sayT); X.font = 'bold 19px "Segoe UI",sans-serif'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText(e.say, q.x, q.y - 12); X.fillStyle = e.c; X.fillText(e.say, q.x, q.y - 12); X.globalAlpha = 1; }
   }
-  { const q = proj(comp.x, comp.y, 52); X.font = '11px Consolas'; X.fillStyle = 'rgba(92,208,255,.9)'; X.fillText('madk1d', q.x, q.y);
+  { const q = proj(comp.x, comp.y, 74); X.font = '11px Consolas'; X.fillStyle = 'rgba(92,208,255,.9)'; X.fillText('madk1d', q.x, q.y);
     if (comp.sayT > 0) { X.font = 'bold 24px "Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText(comp.say, q.x, q.y - 18); X.fillStyle = '#5cd0ff'; X.fillText(comp.say, q.x, q.y - 18); } }
   for (const t of txt) { const q = proj(t.x, t.y, 60); X.globalAlpha = clamp(t.l * 2, 0, 1); X.font = (t.big ? 'bold 22px' : 'bold 15px') + ' "Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 3; X.strokeText(t.s, q.x, q.y); X.fillStyle = t.c; X.fillText(t.s, q.x, q.y); }
   X.globalAlpha = 1;
   for (const o of ents) {
     if ((o.k !== 'npc' && o.k !== 'seva') || dist(o, P) > 750) continue;
-    const q = proj(o.x, o.y, 100), st = o.k === 'npc' ? (S.q[o.id] ? S.q[o.id].st : 0) : -1;
+    const q = proj(o.x, o.y, 118), st = o.k === 'npc' ? (S.q[o.id] ? S.q[o.id].st : 0) : -1;
     X.font = 'bold 12px "Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 3; const nm = o.k === 'seva' ? 'ДЯДЯ СЕВА · мастерская' : NPCS[o.id].n; X.strokeText(nm, q.x, q.y); X.fillStyle = o.k === 'seva' ? '#ffae3b' : NPCS[o.id].c; X.fillText(nm, q.x, q.y);
     if (st === 0 || st === 1) { const rd = st === 1 && qReady(o.id); X.font = 'bold 26px "Segoe UI"'; X.strokeText(st === 0 ? '!' : '?', q.x, q.y - 16); X.fillStyle = st === 0 || rd ? '#ffd23b' : '#8d97aa'; X.fillText(st === 0 ? '!' : '?', q.x, q.y - 16); }
   }
@@ -1017,17 +1199,23 @@ function buildUp() {
     const d = WP[w], lv = S.wl[w];
     if (!lv) { h += `<div class="col lock"><h3>🔒 НЕ НАЙДЕНО</h3><p class="d">Это оружие ждёт тебя дальше по сюжету.</p></div>`; continue; }
     h += `<div class="col"><h3 style="color:${d.col}">${d.icon} ${d.name}</h3><p class="d">${d.desc}</p>`;
-    h += `<div class="sk own"><div><b>Уровень ${lv} / 5</b><span>+20% урона за уровень</span></div>` + (lv < 5 ? `<button data-a="lvl" data-w="${w}" ${S.tapes < WLVL_COST[lv] || !upShop ? 'disabled' : ''}>▣ ${WLVL_COST[lv]}</button>` : '<span>МАКС</span>') + `</div>`;
-    for (const s of d.skills) {
-      const own = sk(s.id);
-      h += `<div class="sk ${own ? 'own' : ''}"><div><b>${s.name}</b><span>${s.desc}</span></div>` + (own ? '<span>✔</span>' : `<button data-a="sk" data-id="${s.id}" data-c="${s.cost}" ${S.xp < s.cost ? 'disabled' : ''}>▶ ${s.cost}</button>`) + `</div>`;
-    }
+    h += `<div class="sk own"><div><b>Уровень ${lv} / 5</b><span>+20% урона за уровень. Открывает новые скиллы.</span></div>` + (lv < 5 ? `<button data-a="lvl" data-w="${w}" ${S.tapes < WLVL_COST[lv] || !upShop ? 'disabled' : ''}>▣ ${WLVL_COST[lv]}</button>` : '<span>МАКС</span>') + `</div>`;
+    d.skills.forEach((s, i) => {
+      const own = sk(s.id), need = SK_LVL[i] || 1, lock = lv < need;
+      h += `<div class="sk ${own ? 'own' : lock ? 'lock' : ''}"><div><b>${s.name}</b><span>${s.desc}${lock && !own ? ' <i style="color:#ffd23b">Нужен ур. оружия ' + need + '.</i>' : ''}</span></div>` + (own ? '<span>✔</span>' : `<button data-a="sk" data-id="${s.id}" data-c="${s.cost}" ${S.xp < s.cost || lock ? 'disabled' : ''}>▶ ${s.cost}</button>`) + `</div>`;
+    });
     h += '</div>';
   }
   h += `<div class="col"><h3>ВАНЁК</h3><p class="d" style="min-height:0">Характеристики покупаются за прослушивания ▶.</p>`;
   for (const s of STATS) {
     const lv = S.st[s.id];
     h += `<div class="sk"><div><b>${s.name} ${'●'.repeat(lv)}${'○'.repeat(5 - lv)}</b><span>${s.desc}</span></div>` + (lv < 5 ? `<button data-a="st" data-id="${s.id}" data-c="${STAT_COST[lv]}" ${S.xp < STAT_COST[lv] ? 'disabled' : ''}>▶ ${STAT_COST[lv]}</button>` : '<span>МАКС</span>') + `</div>`;
+  }
+  h += `<h3 style="color:#ffd23b;margin-top:12px">ЦАЦКИ · надето ${S.trk.eq.length} / 3</h3><p class="d" style="min-height:0">Меняют стиль игры. Покупаются у Севы или лежат в сундуках.</p>`;
+  for (const id in TRK) {
+    const t = TRK[id], own = S.trk.owned[id], eq = S.trk.eq.includes(id);
+    if (!own && !t.cost) { h += `<div class="sk lock"><div><b>???</b><span>Спрятано в сундуке где-то в Облаке.</span></div></div>`; continue; }
+    h += `<div class="sk ${eq ? 'own' : ''}"><div><b>${t.n}</b><span>${t.d}</span></div>` + (own ? `<button data-a="eq" data-id="${id}" ${!eq && S.trk.eq.length >= 3 ? 'disabled' : ''}>${eq ? 'Снять' : 'Надеть'}</button>` : `<button data-a="buy" data-id="${id}" data-c="${t.cost}" ${S.xp < t.cost || !upShop ? 'disabled' : ''}>▶ ${t.cost}</button>`) + `</div>`;
   }
   h += `<h3 style="color:#5cd0ff;margin-top:12px">КЕНТ: madk1d</h3><p class="d" style="min-height:0">Осколки голоса возвращаются по сюжету — их не купить.</p>`;
   COMP.forEach((c, i) => { h += `<div class="sk ${S.comp > i ? 'own' : 'lock'}"><div><b>${S.comp > i ? c.name : '???'}</b><span>${S.comp > i ? c.desc : 'Осколок ещё не найден.'}</span></div></div>`; });
@@ -1040,6 +1228,8 @@ $('upCols').addEventListener('click', ev => {
   if (a === 'lvl') { const w = b.dataset.w, cost = WLVL_COST[S.wl[w]]; if (S.tapes < cost) return; S.tapes -= cost; S.wl[w]++; }
   else if (a === 'sk') { if (S.xp < c) return; S.xp -= c; S.sk[b.dataset.id] = 1; }
   else if (a === 'st') { if (S.xp < c) return; S.xp -= c; S.st[b.dataset.id]++; if (b.dataset.id === 'hp') P.hp += 20; }
+  else if (a === 'eq') { const id = b.dataset.id, i = S.trk.eq.indexOf(id); if (i >= 0) S.trk.eq.splice(i, 1); else if (S.trk.eq.length < 3) S.trk.eq.push(id); P.hp = Math.min(P.hp, maxHp()); }
+  else if (a === 'buy') { if (S.xp < c) return; S.xp -= c; S.trk.owned[b.dataset.id] = 1; if (S.trk.eq.length < 3) S.trk.eq.push(b.dataset.id); }
   sfx.buy(); buildUp();
 });
 
@@ -1059,9 +1249,9 @@ addEventListener('keydown', e => {
     case 'KeyF': doInteract(); break;
     case 'KeyQ': doQ(); break;
     case 'KeyR': doRage(); break;
-    case 'Digit1': S.weapon = 'bat'; P.atk = null; break;
-    case 'Digit2': if (S.wl.mic) { S.weapon = 'mic'; P.atk = null; } break;
-    case 'Digit3': if (S.wl.vinyl) { S.weapon = 'vinyl'; P.atk = null; } break;
+    case 'Digit1': swW('bat'); break;
+    case 'Digit2': swW('mic'); break;
+    case 'Digit3': swW('vinyl'); break;
     case 'Tab': openUp(false); break;
     case 'Escape': mode = 'pause'; show('pause', true); break;
   }

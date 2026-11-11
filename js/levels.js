@@ -86,12 +86,12 @@ const LORE = [
 ];
 
 const LEVELS = [
-  { path: 'EENE', side: [{ at: 1, d: 'S', npc: 'lil' }, { at: 1, d: 'N', lore: 0, chest: { xp: 150 } }, { at: 2, d: 'S', lore: 1, guard: [[['bot', 4], ['hater', 1, 'E']]], chest: { hp: 10 } }] },
-  { path: 'ESE', side: [{ at: 1, d: 'N', npc: 'ded' }, { at: 0, d: 'N', npc: 'reverb' }, { at: 0, d: 'S', lore: 0, chest: { xp: 200 } }, { at: 1, d: 'E', q: 'ded', lore: 1, guard: [[['clipper', 3]], [['clipper', 2], ['bot', 3, 'E']]], chest: { tapes: 1 } }] },
-  { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'hook' }, { at: 1, d: 'E', npc: 'paint' }, { at: 2, d: 'N', q: 'paint', lore: 0, guard: [[['clipper', 3], ['hater', 2]], [['troll', 1, 'E'], ['hater', 2]]], chest: { hp: 10 } }, { at: 2, d: 'W', lore: 1, chest: { xp: 300 } }] },
-  { path: 'EESE', side: [{ at: 1, d: 'N', npc: 'sad' }, { at: 1, d: 'S', lore: 0, chest: { xp: 350 } }, { at: 2, d: 'N', lore: 1, guard: [[['hater', 4], ['troll', 1]], [['troll', 1, 'E'], ['ghost', 2]]], chest: { hp: 10 } }] },
-  { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'feat' }, { at: 2, d: 'N', lore: 0, guard: [[['lawyer', 3], ['clipper', 2]], [['lawyer', 2, 'E'], ['troll', 1]]], chest: { tapes: 1 } }, { at: 2, d: 'W', lore: 1 }, { at: 1, d: 'E', chest: { xp: 450 } }] },
-  { path: 'EENE', side: [{ at: 1, d: 'S', npc: 'demo' }, { at: 1, d: 'N', lore: 0, chest: { xp: 500 } }, { at: 2, d: 'S', npc: 'one' }, { at: 0, d: 'S', q: 'one', lore: 1, guard: [[['ghost', 4]], [['ghost', 2, 'E'], ['hater', 3]]], chest: { hp: 10 } }] },
+  { path: 'EENE', side: [{ at: 1, d: 'S', npc: 'lil' }, { at: 1, d: 'N', lore: 0, chest: { item: 'tape' } }, { at: 2, d: 'S', lore: 1, guard: [[['bot', 4], ['hater', 1, 'E']]], chest: { hp: 10 } }] },
+  { path: 'ESE', side: [{ at: 1, d: 'N', npc: 'ded' }, { at: 0, d: 'N', npc: 'reverb' }, { at: 0, d: 'S', lore: 0, chest: { item: 'flash' } }, { at: 1, d: 'E', q: 'ded', lore: 1, guard: [[['clipper', 3]], [['clipper', 2], ['bot', 3, 'E']]], chest: { tapes: 1 } }] },
+  { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'hook' }, { at: 1, d: 'E', npc: 'paint' }, { at: 2, d: 'N', q: 'paint', lore: 0, guard: [[['clipper', 3], ['hater', 2]], [['troll', 1, 'E'], ['hater', 2]]], chest: { hp: 10 } }, { at: 2, d: 'W', lore: 1, chest: { item: 'pods' } }] },
+  { path: 'EESE', side: [{ at: 1, d: 'N', npc: 'sad' }, { at: 1, d: 'S', lore: 0, chest: { item: 'grillz' } }, { at: 2, d: 'N', lore: 1, guard: [[['hater', 4], ['troll', 1]], [['troll', 1, 'E'], ['ghost', 2]]], chest: { hp: 10 } }] },
+  { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'feat' }, { at: 2, d: 'N', lore: 0, guard: [[['lawyer', 3], ['clipper', 2]], [['lawyer', 2, 'E'], ['troll', 1]]], chest: { tapes: 1 } }, { at: 2, d: 'W', lore: 1 }, { at: 1, d: 'E', chest: { item: 'ring' } }] },
+  { path: 'EENE', side: [{ at: 1, d: 'S', npc: 'demo' }, { at: 1, d: 'N', lore: 0, chest: { item: 'pin' } }, { at: 2, d: 'S', npc: 'one' }, { at: 0, d: 'S', q: 'one', lore: 1, guard: [[['ghost', 4]], [['ghost', 2, 'E'], ['hater', 3]]], chest: { hp: 10 } }] },
   { path: 'ESEE', side: [{ at: 1, d: 'N', npc: 'hz' }, { at: 1, d: 'E', lore: 0, chest: { xp: 600 } }, { at: 2, d: 'W', lore: 1, guard: [[['farmer', 2], ['bot', 5]], [['farmer', 1, 'E'], ['lawyer', 2]]], chest: { hp: 10 } }] },
   { path: 'EESE', side: [{ at: 1, d: 'N', npc: 'top' }, { at: 2, d: 'N', q: 'top', lore: 0, guard: [[['clipper', 3], ['lawyer', 2]], [['troll', 1, 'E'], ['farmer', 2]]], chest: { tapes: 1 } }, { at: 1, d: 'S', npc: 'onehit' }, { at: 0, d: 'N', lore: 1, chest: { xp: 700 } }] },
   { path: 'ENE', side: [{ at: 1, d: 'S', npc: 'first' }, { at: 0, d: 'N', lore: 0, chest: { xp: 800 } }, { at: 0, d: 'S', lore: 1, guard: [[['ghost', 3], ['lawyer', 2]], [['troll', 1, 'E'], ['ghost', 3]]], chest: { hp: 10 } }] },
