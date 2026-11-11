@@ -221,7 +221,7 @@ function loadLevel() {
     }
   }
   let cp = LV.main[0]; for (let i = 0; i < S.step; i++) if (LV.stepRoom[i]) cp = LV.stepRoom[i];
-  P.x = cp.cx; P.y = cp.cy + 40; P.thr = null; P.fin = null; P.chg = 0; P.atk = null; P.dodge = 0; P.inv = 0; P.spin = 0; slowmo = 0; hitstop = 0; comp.x = P.x - 40; comp.y = P.y + 30;
+  P.x = cp.cx; P.y = cp.cy + 40; P.thr = null; P.fin = null; P.chg = 0; P.atk = null; banners = []; hfx = []; marks = []; cine = null; P.dodge = 0; P.inv = 0; P.spin = 0; slowmo = 0; hitstop = 0; comp.x = P.x - 40; comp.y = P.y + 30;
 }
 function startChapter() {
   loadLevel(); save(); const ch = CH[S.ch];
@@ -459,6 +459,7 @@ function tryAtk(heavy, c) {
   if (crit) P.crit = 0;
   if (full) { float(P.x, P.y - 62, 'ПОЛНЫЙ ЗАРЯД', '#ffffff', 1); shake = Math.max(shake, 6); }
   P.post = 0; sfx.swing();
+  if (w !== 'vinyl') { P.lv = heavy ? 330 : P.combo % 3 === 0 ? 400 : 230; P.lt = heavy ? .14 : .1; P.la = P.atk.a; }
 }
 function aimAssist(w) {
   const rg = w === 'vinyl' ? 650 : 250; let best = null, bs = .75;
@@ -553,11 +554,12 @@ function dmgE(e, dmg, o) {
   e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .55 : 1.1) * (e.boss ? 2.2 : 1) + (o.sm || 0);
   if (e.sm >= 1 && !e.fin && e.hp > 0) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [F]', '#ffe14a', 1); }
   float(e.x + rnd(-10, 10), e.y - e.r - 6, Math.round(dmg), dmg > 60 ? '#ffd23b' : '#fff');
-  burst(e.x, e.y, e.c, 4);
+  burst(e.x, e.y, e.c, 3); { const ha = ang(P, e), hc = o.w ? WP[o.w].col : '#ffffff'; sparks(e.x, e.y, ha, o.heavy ? 14 : 7, o.heavy ? '#ffffff' : hc); fxGlow(e.x, e.y, hc, o.heavy ? 150 : 80, .16, e.r * 1.8 + (e.air || 0)); if (o.heavy) punch = Math.max(punch, 4); }
   if (P.rage <= 0) P.swag = Math.min(100, P.swag + dmg * .08 * (has('energy') ? 1.4 : 1) * (1 + .25 * S.st.swag) * (o.w === 'mic' && sk('m4') ? 2 : 1));
   else P.hp = Math.min(maxHp(), P.hp + dmg * .02);
   if (!e.boss) {
     if (o.kb) { const an = ang(P, e); e.kx += Math.cos(an) * o.kb; e.ky += Math.sin(an) * o.kb; }
+    if (o.heavy && e.ai !== 'brute' && !(e.air > 0)) { e.vz = o.full ? 430 : 310; e.air = 1; } else if (e.air > 0 && o.w) e.vz = Math.max(e.vz, 150);
     if ((o.heavy || (e.ai !== 'brute' && !(e.poi > 0))) && e.state !== 'dash') { e.state = 'hurt'; e.t = .22; if (!o.heavy) e.poi = 1.2; }
     if (o.stun) e.stun = Math.max(e.stun, o.stun);
     if (o.slow) e.slow = o.slow;
@@ -569,7 +571,7 @@ function kill(e, o) {
   e.xp = Math.round(e.xp * (1 + Math.min(6, Math.floor(P.style || 0)) * .06)); S.xp += e.xp; styleAdd(.15);
   if (!e.boss) { P.mk = T - (P.mkT || -9) < 2.6 ? (P.mk || 0) + 1 : 1; P.mkT = T; const mn = { 3: 'ТРИПЛ', 5: 'ЗОЛОТО', 8: 'ПЛАТИНА', 12: 'БРИЛЛИАНТ', 17: 'ЧАРТ-ТОППЕР' }[P.mk]; if (mn) { banner(mn, 'убийств подряд: ' + P.mk, '#ffd23b'); P.swag = Math.min(100, P.swag + 10); styleAdd(.5); sfx.buy(); } }
   for (const id in S.q) { const q = S.q[id], n = NPCS[id]; if (q.st === 1 && n.q.type === 'kill' && n.q.t === e.type && q.n < n.q.n) { q.n++; if (q.n >= n.q.n) toast('Услуга готова: вернись к ' + n.n, 4); } } float(e.x, e.y - e.r - 24, '+' + e.xp + ' ▶', '#7dff7d');
-  burst(e.x, e.y, e.c, e.boss ? 80 : 14);
+  burst(e.x, e.y, e.c, e.boss ? 80 : 14); if (o && o.w && !e.boss) { const an = ang(P, e); e.kx += Math.cos(an) * 320; e.ky += Math.sin(an) * 320; if (e.m) { e.m.userData.kx = e.kx; e.m.userData.ky = e.ky; } }
   if (o && o.w === 'bat' && sk('b6')) P.hp = Math.min(maxHp(), P.hp + maxHp() * .03);
   if (e.boss) {
     for (const q of ens) if (q !== e) { q.dead = true; burst(q.x, q.y, q.c, 8); }
@@ -591,7 +593,7 @@ function hurtP(dmg, src, isProj) {
     dmg *= .4; sfx.block();
   } else sfx.hurt();
   dmg *= [.6, 1, 1.5][S.diff]; if (P.rage > 0) dmg *= .65;
-  P.hits = 0; P.hitT = 0; P.hurtT = .3; P.style = Math.max(0, (P.style || 0) - 1.5);
+  P.hits = 0; P.hitT = 0; P.hurtT = .3; sparks(P.x, P.y, rnd(0, TAU), 8, '#ff4040'); fxGlow(P.x, P.y, '#ff2020', 130, .2); P.style = Math.max(0, (P.style || 0) - 1.5);
   P.hp -= dmg; P.inv = .4; shake = Math.max(shake, 10); flash = .25;
   float(P.x, P.y - 30, '-' + Math.round(dmg), '#ff4040');
   if (P.hp <= 0) die();
@@ -647,6 +649,7 @@ function updPlayer(dt) {
   if (P.block) sp *= .4; if (P.atk) sp *= P.atk.heavy ? .25 : .55;
   if (P.dodge > 0) { P.dodge -= dt; P.x += P.dvx * dt; P.y += P.dvy * dt; if (P.dodge <= 0) P.post = .4; }
   else { P.x += mx * sp * dt; P.y += my * sp * dt; }
+  if (P.lt > 0) { P.lt -= dt; P.x += Math.cos(P.la) * P.lv * dt; P.y += Math.sin(P.la) * P.lv * dt; }
   for (const k of ['dcd', 'inv', 'acd', 'post', 'buff', 'qcd', 'pdT', 'crit', 'swT', 'hitT', 'hurtT']) if (P[k] > 0) P[k] -= dt;
   if (!(P.hitT > 0) && P.style > 0) P.style = Math.max(0, P.style - dt * .3);
   for (const w in P.rcd) if (P.rcd[w] > 0) P.rcd[w] -= dt;
@@ -681,6 +684,7 @@ function moveE(e, an, sp, dt) { e.x += Math.cos(an) * sp * dt; e.y += Math.sin(a
 function updEnemy(e, dt) {
   if (e.fl > 0) e.fl -= dt;
   if (e.spawn > 0) { e.spawn -= dt; return; }
+  if (e.air > 0) { e.air += e.vz * dt; e.vz -= 1150 * dt; e.stun = Math.max(e.stun, .12); if (e.air <= 0) { e.air = 0; e.vz = 0; rings.push({ x: e.x, y: e.y, r: 10, mr: 50, l: .3, c: '#cfd6e6' }); burst(e.x, e.y, '#99a', 5); } }
   if (e.shock > 0) { e.shock -= dt; if (sk('m7')) { e.hp -= 9 * dt * (1 + S.ch * .2); if (e.hp <= 0) { kill(e, {}); return; } } }
   if (e.pitch > 0) e.pitch -= dt; if (e.poi > 0) e.poi -= dt; if (e.brk > 0) e.brk -= dt;
   e.x += e.kx * dt; e.y += e.ky * dt; const fr = Math.pow(.004, dt); e.kx *= fr; e.ky *= fr;
@@ -802,7 +806,7 @@ function bossExec(e) {
 
 /* ================= ЭФФЕКТЫ ================= */
 function burst(x, y, c, n) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), s = rnd(60, 320); pts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: rnd(.25, .6), c, s: rnd(2, 5) }); } }
-function ring(x, y, r, c) { rings.push({ x, y, r: r * .2, mr: r, l: .35, c }); if (r >= 110) flashAt(x, y, c, 2.2); }
+function ring(x, y, r, c) { rings.push({ x, y, r: r * .2, mr: r, l: .35, c }); if (r >= 110) { flashAt(x, y, c, 2.2); punch = Math.max(punch, r > 200 ? 7 : 3); marks.push({ x, y, r: Math.min(r, 260) * .55, l: 6 }); if (marks.length > 22) marks.shift(); } }
 function float(x, y, s, c, big) { txt.push({ x, y, s: String(s), c, l: big ? 1.1 : .7, big }); }
 function updFx(dt) {
   for (const p of pts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .94; p.vy *= .94; p.l -= dt; }
@@ -931,7 +935,7 @@ function aimPoint() {
   _nd.set(M.x / W * 2 - 1, -(M.y / H * 2 - 1)); _ray.setFromCamera(_nd, CAM);
   return _ray.ray.intersectPlane(_pl, _hit) ? { x: _hit.x, y: _hit.z } : { x: P.x + Math.cos(P.aim), y: P.y + Math.sin(P.aim) };
 }
-function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual]); }
+function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual]); if (R3 && COMP) { const pr = R3.getPixelRatio(); COMP.setPixelRatio(pr); COMP.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
 addEventListener('resize', setPR);
 
 function init3d() {
@@ -942,6 +946,14 @@ function init3d() {
   HEMI = new T3.HemisphereLight(0xdde6ff, 0x1a1c2a, .6); SC.add(HEMI);
   SUN = new T3.DirectionalLight(0xffffff, .75); SUN.castShadow = true; SUN.shadow.mapSize.set(1024, 1024);
   const sc = SUN.shadow.camera; sc.left = -650; sc.right = 650; sc.top = 650; sc.bottom = -650; sc.near = 100; sc.far = 2500; SC.add(SUN, SUN.target); FL = new T3.PointLight('#ffffff', 0, 560, 2); SC.add(FL);
+  { const rim = new T3.DirectionalLight('#8fb4ff', .45); rim.position.set(-300, 220, -420); SC.add(rim); }
+  if (T3.EffectComposer && T3.UnrealBloomPass && T3.RenderPass && T3.ShaderPass) {
+    try {
+      COMP = new T3.EffectComposer(R3); RP = new T3.RenderPass(SC, CAM); COMP.addPass(RP);
+      COMP.addPass(new T3.UnrealBloomPass(new T3.Vector2(W, H), .4, .42, .9)); COMP.addPass(new T3.ShaderPass(T3.GammaCorrectionShader));
+      FXA = new T3.ShaderPass(T3.FXAAShader); COMP.addPass(FXA); setPR();
+    } catch (e) { COMP = null; }
+  }
   _ray = new T3.Raycaster(); _pl = new T3.Plane(new T3.Vector3(0, 1, 0), 0); _hit = new T3.Vector3(); _nd = new T3.Vector2(); v3 = new T3.Vector3();
   // Ванёк
   const r = 17; PM = new T3.Group(); PIN = new T3.Group(); PM.add(PIN);
@@ -976,7 +988,7 @@ function wallTex(k) {
   }
   { const tq = new T3.CanvasTexture(c); tq.encoding = T3.sRGBEncoding; return tq; }
 }
-let FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [];
+let COMP = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [];
 const ENVC = {
   snow: { sun: '#9db4ff', si: .55, hs: '#8fa6d8', hg: '#1a1c2a', hi: .75, pt: ['#ffffff', 5, -60, 25, 420] },
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
@@ -992,6 +1004,9 @@ const WDECO = { snow: [['p_bush', 30], ['p_trash_A', 30], ['p_firehydrant', 26],
   glass: [['p_cabinet_medium', 60], ['p_lamp_standing', 70], ['p_chair_A', 34]], grave: [['p_candle_triple', 24], ['p_skull', 16], ['p_bone_A', 10], ['p_pumpkin_orange_jackolantern', 24], ['p_tree_dead_medium', 120]],
   server: [['p_containers_B', 60], ['p_rocks_A', 30], ['p_lights', 110]], chart: [['p_Box_A', 30], ['p_Barrel_A', 36]] };
 const TRIM = { snow: ['#e8eef8', 0], neon: ['#ff3cc8', 1], server: ['#2affb0', 1], chart: ['#ff5a32', .8], glass: ['#9cc4f0', .3], basement: ['#2a1c12', 0], core: ['#cfd3de', 0] };
+function draw(sc) { if (COMP && qual === 2) { RP.scene = sc; COMP.render(); } else R3.render(sc, CAM); }
+function sparks(x, y, a, n, c) { for (let i = 0; i < n; i++) { const an = a + rnd(-.8, .8), sp = rnd(260, 640); pts.push({ x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp, l: rnd(.12, .3), c, s: rnd(2, 3.6), st: 1 }); } }
+function fxGlow(x, y, c, s, l, h) { hfx.push({ x, y, c, s, l, ml: l, h: h || 34 }); if (hfx.length > 60) hfx.shift(); }
 function glowS(col, size) { const sp = new T3.Sprite(new T3.SpriteMaterial({ map: G('glowT2', () => { const [c, x] = cnv(64, 64), q = x.createRadialGradient(32, 32, 2, 32, 32, 31); q.addColorStop(0, 'rgba(255,255,255,1)'); q.addColorStop(.3, 'rgba(255,255,255,.5)'); q.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = q; x.fillRect(0, 0, 64, 64); return new T3.CanvasTexture(c); }), color: col, transparent: true, depthWrite: false, blending: T3.AdditiveBlending })); sp.scale.set(size, size, 1); return sp; }
 function flashAt(x, y, c, k) { if (!FL) return; FL.position.set(x, 70, y); FL.color.set(c); FL.intensity = Math.max(FL.intensity, k); }
 function banner(s, sub, c) { banners.push({ s, sub, c, t: 0 }); if (banners.length > 2) banners.shift(); }
@@ -1017,7 +1032,7 @@ function menuScene(now, fdt) {
   if (!MSK && MDL.kent) { MSK = inst('kent', 104, { tint: '#bfe6ff', mix: .3 }); MSK.position.set(-40, 0, 95); MSK.rotation.y = -1.5; MSC.add(MSK); }
   if (MSH) MSH.userData.mx.update(fdt); if (MSK) MSK.userData.mx.update(fdt);
   const a = Math.sin(now * .22) * .55 + .35; CAM.fov = 42; CAM.updateProjectionMatrix();
-  CAM.position.set(Math.cos(a) * 330, 105 + Math.sin(now * .4) * 8, Math.sin(a) * 330 + 40); CAM.lookAt(0, 62, 30); R3.render(MSC, CAM);
+  CAM.position.set(Math.cos(a) * 330, 105 + Math.sin(now * .4) * 8, Math.sin(a) * 330 + 40); CAM.lookAt(0, 62, 30); draw(MSC);
 }
 function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function floorTex(k) {
@@ -1432,7 +1447,7 @@ function render() {
   const th = CH[Math.min(S.ch, CH.length - 1)].th, now = performance.now() / 1000, fdt = Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
   if (builtDeco !== deco) { builtDeco = deco; buildWorld(th); }
   // камера
-  if (!cine && !P.fin && CAM.fov !== 56) { CAM.fov = 56; CAM.updateProjectionMatrix(); }
+  punch *= Math.pow(.004, fdt); { const bf = 56 + punch; if (!cine && !P.fin && Math.abs(CAM.fov - bf) > .05) { CAM.fov = bf; CAM.updateProjectionMatrix(); } }
   const sx = shake ? rnd(-shake, shake) * .5 : 0, sy = shake ? rnd(-shake, shake) * .5 : 0, fo = P.fin ? Math.sin(clamp(P.fin.el / P.fin.tot, 0, 1) * Math.PI) : 0, cyw = camYaw + fo * .6, fx = Math.cos(cyw), fz = Math.sin(cyw), cd0 = 270 - fo * 120;
   let cdn = cd0; for (let t = 30; t <= cd0; t += 20) if (!okPos(P.x - fx * t, P.y - fz * t, 12)) { cdn = t - 20; break; }
   camD += (Math.max(40, cdn) - camD) * .2;
@@ -1464,7 +1479,7 @@ function render() {
     else if (P.hurtT > 0) play(pg, 'hitB', true, .35, 'h');
     else if (P.block) play(pg, 'block');
     else if (P.spin > 0) play(pg, 'ms', false, .45);
-    else if (a) play(pg, a.d === FIST ? (cb === 0 ? 'kick' : cb === 1 ? 'p1' : 'p2') : a.w === 'bat' ? (a.heavy ? 'bh' : cb === 0 ? 'b3' : 'b1') : a.w === 'mic' ? (a.heavy ? 'mh' : cb === 0 ? 'm3' : cb === 1 ? 'm1' : 'm2') : (a.heavy ? 'vh' : 'v1'), true, a.dur * 1.6, a.n);
+    else if (a) play(pg, a.d === FIST ? (cb === 0 ? 'kick' : cb === 1 ? 'p1' : 'p2') : a.w === 'bat' ? (a.heavy ? 'bh' : cb === 0 ? 'b3' : 'b1') : a.w === 'mic' ? (a.heavy ? 'mh' : cb === 0 ? 'm3' : cb === 1 ? 'm1' : 'm2') : (a.heavy ? 'vh' : 'v1'), true, Math.max(a.dur * 1.25, a.wind / .4), a.n);
     else if (P.chg > .15) play(pg, 'bi');
     else if (mode === 'fight' && P.mv) play(pg, 'run');
     else play(pg, w === 'bat' && !P.thr && fs ? 'bi' : 'idle');
@@ -1496,7 +1511,7 @@ function render() {
   if (P.chg > .15) dRing(P.x, P.y, 30 + P.chg * 44, P.chg >= 1 ? '#ffffff' : wd.col, .9);
   if (P.crit > 0) dRing(P.x, P.y, 26, '#ffffff', .5 + .4 * Math.sin(now * 16));
   for (const q of statics) q.userData.mx.update(fdt);
-  corpses = corpses.filter(c => { c.t -= fdt; c.m.userData.mx.update(fdt); if (c.t < .5) c.m.position.y -= fdt * 60; if (c.t <= 0) { SC.remove(c.m); return false; } return true; });
+  corpses = corpses.filter(c => { c.t -= fdt; c.m.userData.mx.update(fdt); c.m.position.x += c.vx * fdt; c.m.position.z += c.vy * fdt; c.vx *= Math.pow(.02, fdt); c.vy *= Math.pow(.02, fdt); c.m.position.y = Math.max(0, c.m.position.y - fdt * 300); if (c.t < .45) c.m.scale.multiplyScalar(Math.max(.01, 1 - fdt * 5)); if (c.t <= 0) { SC.remove(c.m); return false; } return true; });
 
   // враги
   stamp++;
@@ -1510,7 +1525,8 @@ function render() {
     m.rotation.y = -((e.state === 'wind' || e.state === 'dash') ? e.aa : ang(e, P));
     m.rotation.z = e.stun > 0 ? Math.sin(now * 22) * .14 : e.state === 'wind' && !e.boss ? -.18 : 0;
     if (m.userData.mdl) {
-      const u = m.userData; m.rotation.z = 0; if (e.type !== 'ghost') m.position.y = 0;
+      const u = m.userData; m.rotation.z = e.air > 0 ? Math.sin(now * 13 + e.ph0) * .55 : 0; m.position.y = (e.type === 'ghost' ? m.position.y : 0) + (e.air || 0); u.kx = e.kx; u.ky = e.ky;
+      if (e.state === 'wind' && u.ps !== 'wind') { fxGlow(e.x, e.y, e.ai === 'brute' || (e.boss && ['slam', 'leap', 'charge'].includes(e.mv)) ? '#ff2020' : '#ffd23b', e.boss ? 190 : 110, .32, u.top * .85); if (dist(e, P) < 500) tone(e.boss ? 520 : 1250, .07, 'square', .05); }
       if (e.state === 'wind' && u.ps !== 'wind') { u.wn = (u.wn || 0) + 1; u.wd = Math.max(.3, e.t); } u.ps = e.state;
       const cast = e.ai === 'ranged' || e.ai === 'summon' || (e.boss && !['slam', 'leap', 'charge'].includes(e.mv));
       if (e.spawn > 0) play(m, 'spawn', true, e.boss ? 1.2 : .7, 's'); else if (e.boss && (e.sayT > 2.4 || (cine && cine.t > 1.2))) play(m, 'taunt', true, 1.4, 't' + e.ph + (cine ? 'c' : '')); else if (e.stun > 0 || e.state === 'hurt') play(m, 'hit');
@@ -1525,7 +1541,7 @@ function render() {
     if (e.el) dRing(e.x, e.y, e.r + 9, '#ffd23b', .9);
     if (e.fin) dRing(e.x, e.y, e.r + 16 + Math.sin(now * 14) * 4, '#ffe14a', 1);
   }
-  emesh = emesh.filter(m => { if (m.userData.st !== stamp) { if (m.userData.mdl && corpses.length < 14) { play(m, Math.random() < .5 ? 'death' : 'deathB', true); m.rotation.z = 0; corpses.push({ m, t: 1.5 }); } else SC.remove(m); return false; } return true; });
+  emesh = emesh.filter(m => { if (m.userData.st !== stamp) { if (m.userData.mdl && corpses.length < 14) { play(m, Math.random() < .5 ? 'death' : 'deathB', true); m.rotation.z = 0; corpses.push({ m, t: 1.5, vx: (m.userData.kx || 0) * 1.4, vy: (m.userData.ky || 0) * 1.4 }); } else SC.remove(m); return false; } return true; });
 
   // зоны, сферы, снаряды, эффекты
   for (const h of haz) { const c = h.pl ? '#5cd0ff' : '#ff3030'; dCirc(h.x, h.y, h.r, c, .22); dRing(h.x, h.y, h.r, c, .9); dRing(h.x, h.y, h.r * clamp(1 - h.t / h.mt, 0, 1), '#ffffff', .7); }
@@ -1541,9 +1557,14 @@ function render() {
     else if (p.cm && p.from === 'e') { const m = use('pc', () => emo('💬', 34, 0)); m.position.set(p.x, 30, p.y); dCirc(p.x, p.y, p.r * 1.3, '#ff5050', .3); }
     else { const m = use('pe', () => mesh(new T3.SphereGeometry(1, 12, 10), new T3.MeshBasicMaterial())); m.castShadow = false; m.position.set(p.x, 22, p.y); m.scale.setScalar(p.r * 1.15); m.material.color.set(p.col); dCirc(p.x, p.y, p.r * 1.3, p.col, .3); }
   }
-  for (const p of pts) { const m = use('pt', () => { const q = new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial()); return q; }); m.position.set(p.x, 14 + p.l * 60, p.y); m.scale.setScalar(p.s * 1.4); m.material.color.set(p.c); }
+  for (const p of pts) { const m = use('pt', () => { const q = new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial()); return q; }); m.material.color.set(p.c); if (p.st) { m.position.set(p.x, 32 + p.l * 40, p.y); m.scale.set(p.s * 7, p.s * .7, p.s * .7); m.rotation.y = -Math.atan2(p.vy, p.vx); } else { m.position.set(p.x, 14 + p.l * 60, p.y); m.scale.setScalar(p.s * 1.4); m.rotation.y = 0; } }
   for (const b of bolts) { const m = use('bolt', () => new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial())); const L = Math.hypot(b.x2 - b.x1, b.y2 - b.y1); m.position.set((b.x1 + b.x2) / 2, 26 + rnd(-4, 4), (b.y1 + b.y2) / 2); m.scale.set(L, 4, 4); m.rotation.y = -Math.atan2(b.y2 - b.y1, b.x2 - b.x1); m.material.color.set(b.c); }
   if (SKYM) SKYM.position.set(P.x, 0, P.y);
+  for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
+  if (P.dodge > 0) fxGlow(P.x, P.y, '#7fd4ff', 90, .28, 40);
+  if (P.chg > .15) { const gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(P.chg >= 1 ? '#ffffff' : wd.col); gq.material.opacity = .5 + P.chg * .5; gq.scale.setScalar(70 + P.chg * 170 + Math.sin(now * 30) * 12); gq.position.set(P.x, 44, P.y); if (Math.random() < .6) { const an = rnd(0, TAU); pts.push({ x: P.x + Math.cos(an) * 110, y: P.y + Math.sin(an) * 110, vx: -Math.cos(an) * 420, vy: -Math.sin(an) * 420, l: .22, c: wd.col, s: 2.4, st: 1 }); } }
+  if (a && a.t >= a.wind && a.w !== 'vinyl') { const dd = a.d || wd[a.heavy ? 'heavy' : 'light'], kq = clamp((a.t - a.wind) / (a.dur - a.wind + .001), 0, 1), sg = a.combo % 2 ? -1 : 1, ca = a.a + sg * (kq - .5) * dd.arc * .8, gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(wd.col); gq.material.opacity = 1 - kq; gq.scale.setScalar(a.heavy ? 150 : 90); gq.position.set(P.x + Math.cos(ca) * dd.range * .85, 36, P.y + Math.sin(ca) * dd.range * .85); }
+  for (const h of hfx) { h.l -= fdt; if (h.l <= 0) continue; const gq = use('hf', () => glowS('#ffffff', 10)), q = h.l / h.ml; gq.material.color.set(h.c); gq.material.opacity = q; gq.scale.setScalar(h.s * (1.25 - q * .5)); gq.position.set(h.x, h.h, h.y); } hfx = hfx.filter(h => h.l > 0);
   if (AMB) { const pa = AMB.geometry.attributes.position, d = ambD, wr = (v, m) => ((v % m) + m) % m;
     for (let i = 0; i < d.n; i++) { const b = d.base[i]; pa.setXYZ(i, P.x - 750 + wr(b[0] + Math.sin(now * .4 + b[3]) * d.dr - P.x, 1500), wr(b[1] + now * d.vy, 420), P.y - 750 + wr(b[2] + Math.cos(now * .3 + b[3]) * d.dr - P.y, 1500)); }
     pa.needsUpdate = true; }
@@ -1560,7 +1581,7 @@ function render() {
   }
   if (fs && !fs.done) { const r = fs.room; for (const [x, z, sx, sz] of [[r.cx, r.y, r.w, 6], [r.cx, r.y + r.h, r.w, 6], [r.x, r.cy, 6, r.h], [r.x + r.w, r.cy, 6, r.h]]) { const m = use('gate', () => new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: .3, depthWrite: false }))); m.position.set(x, 26, z); m.scale.set(sx, 52, sz); } }
   for (const k in pools) { const p = pools[k]; for (let i = p.i; i < p.a.length; i++) p.a[i].visible = false; }
-  R3.render(SC, CAM);
+  draw(SC);
 
   // 2D-слой поверх: подписи, полоски, HUD
   X.textAlign = 'center'; X.textBaseline = 'alphabetic';
