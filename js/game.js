@@ -978,7 +978,7 @@ const ENVC = {
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
   neon: { sun: '#ff7ae0', si: .5, hs: '#b87aff', hg: '#12061e', hi: .75, pt: ['#ff5cc8', 4, 40, 10, 260] },
   swamp: { sun: '#b6e36a', si: .5, hs: '#6f9a55', hg: '#0a120a', hi: .75, pt: ['#d8ff6a', 6, 6, 30, 240] },
-  glass: { sun: '#ffffff', si: .8, hs: '#cfe2ff', hg: '#1a2330', hi: .8, pt: ['#ffffff', 2, -4, 6, 100] },
+  glass: { sun: '#ffffff', si: .7, hs: '#cfe2ff', hg: '#1a2330', hi: .6, pt: ['#ffffff', 2, -4, 6, 100] },
   grave: { sun: '#a99cff', si: .5, hs: '#7a70c8', hg: '#0b0a14', hi: .7, pt: ['#b79cff', 4, 10, 20, 240] },
   server: { sun: '#7dffc8', si: .5, hs: '#4ad6a0', hg: '#06100e', hi: .65, pt: ['#2affb0', 3, 70, 4, 260] },
   chart: { sun: '#ffb07a', si: .65, hs: '#ff9a6a', hg: '#140a08', hi: .7, pt: ['#ff8a3c', 4, 55, 18, 260] },
@@ -991,7 +991,7 @@ const TRIM = { snow: ['#e8eef8', 0], neon: ['#ff3cc8', 1], server: ['#2affb0', 1
 function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function floorTex(k) {
   const [c, x] = cnv(512, 512), R = (a, b) => a + Math.random() * (b - a);
-  x.fillStyle = { snow: '#23272f', basement: '#4a3c30', neon: '#1a0b2e', swamp: '#2a2a17', glass: '#b9c0cc', grave: '#2a2622', server: '#1c2a28', chart: '#2a1a16', core: '#e4e6ee' }[k] || '#333'; x.fillRect(0, 0, 512, 512);
+  x.fillStyle = { snow: '#23272f', basement: '#4a3c30', neon: '#1a0b2e', swamp: '#2a2a17', glass: '#6f7888', grave: '#2a2622', server: '#1c2a28', chart: '#2a1a16', core: '#e4e6ee' }[k] || '#333'; x.fillRect(0, 0, 512, 512);
   const spk = (n, cols, s0, s1, a) => { for (let i = 0; i < n; i++) { x.globalAlpha = R(a * .4, a); x.fillStyle = cols[i % cols.length]; const s = R(s0, s1); x.fillRect(R(0, 512), R(0, 512), s, s * R(.6, 1.4)); } x.globalAlpha = 1; };
   const blob = (n, col, r0, r1, a) => { for (let i = 0; i < n; i++) { x.globalAlpha = a; x.fillStyle = col; x.beginPath(); x.ellipse(R(0, 512), R(0, 512), R(r0, r1), R(r0, r1) * R(.5, 1), R(0, 3), 0, TAU); x.fill(); } x.globalAlpha = 1; };
   const lines = (n, col, w) => { x.strokeStyle = col; x.lineWidth = w; for (let i = 0; i < n; i++) { let px = R(0, 512), py = R(0, 512); x.beginPath(); x.moveTo(px, py); for (let j = 0; j < 5; j++) { px += R(-40, 40); py += R(-40, 40); x.lineTo(px, py); } x.stroke(); } };
@@ -1002,7 +1002,7 @@ function floorTex(k) {
     case 'basement': blob(18, '#2e241c', 20, 70, .5); tiles(128, '#2a2019', 3); spk(300, ['#6b5a48'], 2, 6, .3); break;
     case 'neon': tiles(64, '#ff3cc8', 2); tiles(128, '#3cdcff', 2); blob(10, '#3cdcff', 20, 50, .08); break;
     case 'swamp': blob(30, '#3f4a1e', 20, 80, .5); blob(22, '#55702a', 8, 34, .55); blob(12, '#0c140c', 18, 50, .7); spk(500, ['#6f8a3a', '#1a1a0c'], 2, 5, .4); break;
-    case 'glass': tiles(128, '#8e97a6', 3); lines(18, '#9aa3b2', 1); blob(10, '#ffffff', 20, 60, .15); break;
+    case 'glass': tiles(128, '#4c5462', 3); lines(18, '#8a93a2', 1); blob(10, '#ffffff', 20, 60, .1); break;
     case 'grave': blob(30, '#3a3128', 20, 70, .5); blob(20, '#1c1915', 10, 40, .5); spk(500, ['#5a6b3a', '#4a4036'], 2, 5, .45); lines(8, '#15120f', 2); break;
     case 'server': tiles(128, '#0c1513', 5); spk(200, ['#2affb0'], 2, 3, .5); x.fillStyle = '#31423f'; for (let i = 0; i < 512; i += 128) for (let j = 0; j < 512; j += 128) for (const [a, b] of [[8, 8], [112, 8], [8, 112], [112, 112]]) x.fillRect(i + a, j + b, 6, 6); break;
     case 'chart': tiles(256, '#ff5a32', 3); lines(10, '#120a08', 2); blob(14, '#3a241e', 20, 60, .5); break;
@@ -1490,7 +1490,11 @@ function render() {
   for (const r of rings) dRing(r.x, r.y, r.r, r.c, clamp(r.l / .35, 0, 1));
   for (const o of orbs) { const m = use('orb', () => mesh(new T3.SphereGeometry(8, 12, 10), new T3.MeshBasicMaterial({ color: '#7dff7d' }))); m.position.set(o.x, 16 + Math.sin(now * 5 + o.x) * 5, o.y); }
   for (const p of prj) {
-    if (p.paper) { const m = use('pp', () => mesh(new T3.BoxGeometry(18, 2, 14), new T3.MeshBasicMaterial({ color: '#f4f4ff' }))); m.position.set(p.x, 24, p.y); m.rotation.set(0, -Math.atan2(p.vy, p.vx), Math.sin(now * 10 + p.x) * .4); m.material.color.set(p.col); }
+    if (p.from === 'e') { // вражеский снаряд всегда читается: красное свечение и метка на полу
+      const gl = use('pg', () => { const sp = new T3.Sprite(new T3.SpriteMaterial({ map: G('glowT', () => { const [c, x] = cnv(64, 64), q = x.createRadialGradient(32, 32, 2, 32, 32, 31); q.addColorStop(0, 'rgba(255,255,255,1)'); q.addColorStop(.35, 'rgba(255,255,255,.55)'); q.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = q; x.fillRect(0, 0, 64, 64); return new T3.CanvasTexture(c); }), color: '#ff2a2a', transparent: true, depthWrite: false })); sp.scale.set(84, 84, 1); return sp; });
+      gl.position.set(p.x, 26, p.y); dCirc(p.x, p.y, 20, '#ff2020', .45); dRing(p.x, p.y, 21, '#ff2020', 1);
+    }
+    if (p.paper) { const m = use('pp', () => mesh(new T3.BoxGeometry(18, 2, 14), new T3.MeshBasicMaterial({ color: '#f4f4ff' }))); m.position.set(p.x, 24, p.y); m.rotation.set(0, -Math.atan2(p.vy, p.vx), Math.sin(now * 10 + p.x) * .4); m.material.color.set(p.from === 'e' ? '#ff3b3b' : p.col); m.scale.setScalar(1.5); }
     else if (p.from === 'p' && p.col !== '#49e0ff') { const m = use('pv', () => { const g = new T3.Group(); g.add(mesh(new T3.CylinderGeometry(11, 11, 2, 20), new T3.MeshStandardMaterial({ color: '#e9e2ff', metalness: .8, roughness: .2, emissive: '#6a5cff', emissiveIntensity: .4 })), mesh(new T3.BoxGeometry(22, 2.4, 2), new T3.MeshBasicMaterial({ color: '#222' }))); return g; }); m.position.set(p.x, 24, p.y); m.rotation.y = p.rot; }
     else if (p.cm && p.from === 'e') { const m = use('pc', () => emo('💬', 34, 0)); m.position.set(p.x, 30, p.y); dCirc(p.x, p.y, p.r * 1.3, '#ff5050', .3); }
     else { const m = use('pe', () => mesh(new T3.SphereGeometry(1, 12, 10), new T3.MeshBasicMaterial())); m.castShadow = false; m.position.set(p.x, 22, p.y); m.scale.setScalar(p.r * 1.15); m.material.color.set(p.col); dCirc(p.x, p.y, p.r * 1.3, p.col, .3); }
