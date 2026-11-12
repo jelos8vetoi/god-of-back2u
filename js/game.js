@@ -935,7 +935,7 @@ function aimPoint() {
   _nd.set(M.x / W * 2 - 1, -(M.y / H * 2 - 1)); _ray.setFromCamera(_nd, CAM);
   return _ray.ray.intersectPlane(_pl, _hit) ? { x: _hit.x, y: _hit.z } : { x: P.x + Math.cos(P.aim), y: P.y + Math.sin(P.aim) };
 }
-function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual]); if (R3 && COMP) { const pr = R3.getPixelRatio(); COMP.setPixelRatio(pr); COMP.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
+function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual]); if (R3 && PPC) { const pr = R3.getPixelRatio(); PPC.setPixelRatio(pr); PPC.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
 addEventListener('resize', setPR);
 
 function init3d() {
@@ -949,10 +949,10 @@ function init3d() {
   { const rim = new T3.DirectionalLight('#8fb4ff', .45); rim.position.set(-300, 220, -420); SC.add(rim); }
   if (T3.EffectComposer && T3.UnrealBloomPass && T3.RenderPass && T3.ShaderPass) {
     try {
-      COMP = new T3.EffectComposer(R3); RP = new T3.RenderPass(SC, CAM); COMP.addPass(RP);
-      COMP.addPass(new T3.UnrealBloomPass(new T3.Vector2(W, H), .4, .42, .9)); COMP.addPass(new T3.ShaderPass(T3.GammaCorrectionShader));
-      FXA = new T3.ShaderPass(T3.FXAAShader); COMP.addPass(FXA); setPR();
-    } catch (e) { COMP = null; }
+      PPC = new T3.EffectComposer(R3); RP = new T3.RenderPass(SC, CAM); PPC.addPass(RP);
+      PPC.addPass(new T3.UnrealBloomPass(new T3.Vector2(W, H), .4, .42, .9)); PPC.addPass(new T3.ShaderPass(T3.GammaCorrectionShader));
+      FXA = new T3.ShaderPass(T3.FXAAShader); PPC.addPass(FXA); setPR();
+    } catch (e) { PPC = null; }
   }
   _ray = new T3.Raycaster(); _pl = new T3.Plane(new T3.Vector3(0, 1, 0), 0); _hit = new T3.Vector3(); _nd = new T3.Vector2(); v3 = new T3.Vector3();
   // Ванёк
@@ -988,7 +988,7 @@ function wallTex(k) {
   }
   { const tq = new T3.CanvasTexture(c); tq.encoding = T3.sRGBEncoding; return tq; }
 }
-let COMP = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [];
+let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [];
 const ENVC = {
   snow: { sun: '#9db4ff', si: .55, hs: '#8fa6d8', hg: '#1a1c2a', hi: .75, pt: ['#ffffff', 5, -60, 25, 420] },
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
@@ -1004,7 +1004,7 @@ const WDECO = { snow: [['p_bush', 30], ['p_trash_A', 30], ['p_firehydrant', 26],
   glass: [['p_cabinet_medium', 60], ['p_lamp_standing', 70], ['p_chair_A', 34]], grave: [['p_candle_triple', 24], ['p_skull', 16], ['p_bone_A', 10], ['p_pumpkin_orange_jackolantern', 24], ['p_tree_dead_medium', 120]],
   server: [['p_containers_B', 60], ['p_rocks_A', 30], ['p_lights', 110]], chart: [['p_Box_A', 30], ['p_Barrel_A', 36]] };
 const TRIM = { snow: ['#e8eef8', 0], neon: ['#ff3cc8', 1], server: ['#2affb0', 1], chart: ['#ff5a32', .8], glass: ['#9cc4f0', .3], basement: ['#2a1c12', 0], core: ['#cfd3de', 0] };
-function draw(sc) { if (COMP && qual === 2) { RP.scene = sc; COMP.render(); } else R3.render(sc, CAM); }
+function draw(sc) { if (PPC && qual === 2) { RP.scene = sc; PPC.render(); } else R3.render(sc, CAM); }
 function sparks(x, y, a, n, c) { for (let i = 0; i < n; i++) { const an = a + rnd(-.8, .8), sp = rnd(260, 640); pts.push({ x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp, l: rnd(.12, .3), c, s: rnd(2, 3.6), st: 1 }); } }
 function fxGlow(x, y, c, s, l, h) { hfx.push({ x, y, c, s, l, ml: l, h: h || 34 }); if (hfx.length > 60) hfx.shift(); }
 function glowS(col, size) { const sp = new T3.Sprite(new T3.SpriteMaterial({ map: G('glowT2', () => { const [c, x] = cnv(64, 64), q = x.createRadialGradient(32, 32, 2, 32, 32, 31); q.addColorStop(0, 'rgba(255,255,255,1)'); q.addColorStop(.3, 'rgba(255,255,255,.5)'); q.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = q; x.fillRect(0, 0, 64, 64); return new T3.CanvasTexture(c); }), color: col, transparent: true, depthWrite: false, blending: T3.AdditiveBlending })); sp.scale.set(size, size, 1); return sp; }
