@@ -747,6 +747,8 @@ function mkP(x, y, an, speed, dmg, o) {
 }
 function dmgE(e, dmg, o) {
   if (e.dead || e.spawn > 0) return;
+  const courierGuard = e.type === 'courier' && e.state !== 'rec' && e.stun <= 0;
+  if (courierGuard && o.w === 'bat') dmg *= .3;
   if (e.d.shield && o.w && !(e.brk > 0) && e.stun <= 0 && e.state !== 'rec' && e.state !== 'wind') {
     if (o.heavy) { e.brk = 4; e.stun = 1.3; float(e.x, e.y - e.r - 30, 'ЩИТ СЛОМАН', '#7fa8ff', 1); sfx.parry(); }
     else { float(e.x, e.y - e.r - 10, 'БЛОК', '#7fa8ff'); noise(.05, .12, 2500); e.sm = (e.sm || 0) + .04; return; }
@@ -756,7 +758,7 @@ function dmgE(e, dmg, o) {
   if (o.w === 'bat' && e.stun > 0 && sk('b4')) dmg *= 1.5;
   e.hp -= dmg; e.fl = .1;
   if (tomskDrillPending()) e.hp = Math.max(1, e.hp);
-  e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .45 : .8) * (e.boss ? 2 : 1) + (o.sm || 0);
+  if (!courierGuard) e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .45 : .8) * (e.boss ? 2 : 1) + (o.sm || 0);
   if (e.sm >= 1 && !e.fin && e.hp > 0 && !tomskDrillPending()) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [' + KN('interact') + ']', '#ffe14a', 1); tip('fin', 'Враг оглушён: подойди и нажми F — добивание лечит. Если оглушено несколько, добивания пойдут серией.'); }
   float(e.x + rnd(-10, 10), e.y - e.r - 6, Math.round(dmg), dmg > 60 ? '#ffd23b' : '#fff');
   burst(e.x, e.y, e.c, 3); { const ha = ang(P, e), hc = o.w ? WP[o.w].col : '#ffffff'; sparks(e.x, e.y, ha, o.heavy ? 14 : 7, o.heavy ? '#ffffff' : hc); fxGlow(e.x, e.y, hc, o.heavy ? 150 : 80, .16, e.r * 1.8 + (e.air || 0)); if (o.heavy) punch = Math.max(punch, 4); }
@@ -768,7 +770,7 @@ function dmgE(e, dmg, o) {
     if ((o.heavy || (e.ai !== 'brute' && !(e.poi > 0))) && e.state !== 'dash') { e.state = 'hurt'; e.t = .22; if (!o.heavy) e.poi = 1.2; }
     if (o.stun) e.stun = Math.max(e.stun, o.stun);
     if (o.slow) e.slow = o.slow;
-  } else if (o.stun) e.stun = Math.max(e.stun, o.stun * .35);
+  } else if (o.stun && !courierGuard) e.stun = Math.max(e.stun, o.stun * .35);
   if (e.hp <= 0) kill(e, o);
 }
 function kill(e, o) {
@@ -996,7 +998,18 @@ function updBoss(e, dt) {
     case 'dash':
       moveE(e, e.aa, 920, dt); e.t -= dt;
       if (!e.hitP && dist(e, P) < e.r + P.r + 4) { e.hitP = true; hurtP(e.dmg * 1.2, e); }
-      if (e.t <= 0 || !inR(fs.room, e.x, e.y, e.r + 1)) { e.state = 'rec'; e.t = .6; } break;
+      if (e.t <= 0 || !inR(fs.room, e.x, e.y, e.r + 1)) {
+        if (e.type === 'courier' && e.ph === 2 && !e.secondDash) {
+          e.secondDash = true;
+          e.state = 'wind';
+          e.t = WIND.charge;
+          e.aa = ang(e, P);
+        } else {
+          e.state = 'rec';
+          e.t = e.type === 'courier' ? 1.35 : .6;
+        }
+      }
+      break;
     default:
       if (d > 130) moveE(e, a, e.spd * mad * (e.slow > 0 ? .6 : 1), dt);
       e.cdT -= dt;
@@ -1010,6 +1023,7 @@ function updBoss(e, dt) {
         }
         if (T - (e.lastVoiceAt ?? -Infinity) >= 2.5) bossSpeech(e, BOSS_ATTACK_LINES[m]);
         e.mv = e.last = m; e.state = 'wind'; e.t = WIND[m]; e.aa = a; e.tx = P.x; e.ty = P.y; e.cdT = e.d.gap / mad;
+        if (e.type === 'courier' && m === 'charge') e.secondDash = false;
       }
   }
 }
@@ -1048,7 +1062,7 @@ function bossExec(e) {
         r: 105, t, mt: t, dmg: dm * 1.2, col: '#ff8754' });
     }
   }
-  e.state = 'rec'; e.t = rec;
+  e.state = 'rec'; e.t = e.type === 'courier' ? Math.max(rec, 1.15) : rec;
 }
 
 /* ================= ЭФФЕКТЫ ================= */
@@ -1873,7 +1887,12 @@ function drawHud() {
     X.font = '26px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 8; X.fillStyle = '#fff'; X.fillText(b.d.n, W / 2, 34); X.shadowBlur = 0;
     gbar(W / 2 - 370, 46, 730, 14, bv, hud.bhp, '#5a0d14', b.c);
     const L = b.d.phases.length; X.fillStyle = 'rgba(0,0,0,.85)'; for (let j = 1; j < L; j++) X.fillRect(W / 2 - 370 + 730 * (1 - j / L) + 3, 44, 3, 18);
-    X.font = '12px ' + FONT; X.fillStyle = '#9fb0c8'; X.fillText(b.d.sub, W / 2, 82);
+    X.font = '12px ' + FONT; X.fillStyle = '#9fb0c8';
+    if (b.type === 'courier' && !cine) {
+      const open = b.state === 'rec' || b.stun > 0;
+      X.fillStyle = open ? '#7dff7d' : '#ffd23b';
+      X.fillText(open ? 'ОТКРЫТ ДЛЯ УДАРА' : 'ПРИКРЫВАЕТСЯ ОТ БИТЫ', W / 2, 82);
+    } else X.fillText(b.d.sub, W / 2, 82);
   } else if (fs && fs.surv != null && !fs.done) {
     const seconds = Math.max(0, Math.ceil(fs.surv));
     const time = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
