@@ -1588,10 +1588,10 @@ function teleDecals(e) {
 function render() {
   if (R3) R3.info.reset();
   X.setTransform(1, 0, 0, 1, 0, 0); X.clearRect(0, 0, W, H);
-  if (T3 && (!S || !P || mode === 'menu')) { const nw = performance.now() / 1000, fd = Math.min(.05, lastNow ? nw - lastNow : 0); lastNow = nw; menuScene(nw, fd); return; }
+  if (T3 && (!S || !P || mode === 'menu')) { const nw = window.__clock != null ? window.__clock : performance.now() / 1000, fd = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? nw - lastNow : 0); lastNow = nw; menuScene(nw, fd); return; }
   if (!S || !P || !T3) return;
   if (!R3) init3d();
-  const th = CH[Math.min(S.ch, CH.length - 1)].th, now = performance.now() / 1000, fdt = Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
+  const th = CH[Math.min(S.ch, CH.length - 1)].th, now = window.__clock != null ? window.__clock : performance.now() / 1000, fdt = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
   if (builtDeco !== deco) { builtDeco = deco; buildWorld(th); }
   // камера
   punch *= Math.pow(.004, fdt); { const bf = 56 + punch; if (!cine && !P.fin && Math.abs(CAM.fov - bf) > .05) { CAM.fov = bf; CAM.updateProjectionMatrix(); } }
@@ -1781,9 +1781,9 @@ function render() {
     X.fillStyle = '#000'; X.fillRect(0, 0, W, 96 * q); X.fillRect(0, H - 96 * q, W, 96 * q);
     X.textAlign = 'left'; X.globalAlpha = clamp((cine.t - .5) / .4, 0, 1) * clamp((cine.dur - cine.t) / .4, 0, 1);
     X.fillStyle = b.c; X.fillRect(90 - sl, H - 250, 8, 120); X.font = '84px ' + FONT; X.shadowColor = b.c; X.shadowBlur = 26; X.fillStyle = '#fff'; X.fillText(b.d.n, 116 - sl, H - 176); X.shadowBlur = 0;
-    X.font = '20px ' + FONT; X.fillStyle = b.c; X.fillText(b.d.sub.toUpperCase(), 118 - sl, H - 138); X.globalAlpha = 1; X.textAlign = 'center'; X.font = '12px ' + FONT; X.fillStyle = 'rgba(255,255,255,.5)'; X.fillText('любая клавиша — пропустить', W / 2, H - 40);
-  } else if (mode !== 'title' && mode !== 'end' && mode !== 'dlg') { drawHud(); drawNav(); }
-  if (tipQ.length && mode === 'fight') {
+    X.font = '20px ' + FONT; X.fillStyle = b.c; X.fillText(b.d.sub.toUpperCase(), 118 - sl, H - 138); X.globalAlpha = 1; X.textAlign = 'center'; X.font = '12px ' + FONT; X.fillStyle = 'rgba(255,255,255,.5)'; if (!window.__noHud) X.fillText('любая клавиша — пропустить', W / 2, H - 40);
+  } else if (mode !== 'title' && mode !== 'end' && mode !== 'dlg' && !window.__noHud) { drawHud(); drawNav(); }
+  if (tipQ.length && mode === 'fight' && !window.__noHud) {
     tipT += fdt; const tx = tipQ[0], al = clamp(tipT / .3, 0, 1) * clamp((7 - tipT) / .4, 0, 1); X.globalAlpha = al; X.font = '15px "Segoe UI",sans-serif';
     const words = tx.split(' '), lines = []; let ln = ''; for (const wq of words) { if (X.measureText(ln + wq).width > 560) { lines.push(ln); ln = ''; } ln += wq + ' '; } lines.push(ln);
     const bh = 30 + lines.length * 21, by = H - 232 - bh; X.fillStyle = 'rgba(8,10,16,.9)'; X.fillRect(W / 2 - 310, by, 620, bh); X.fillStyle = '#5cd0ff'; X.fillRect(W / 2 - 310, by, 5, bh);
@@ -1938,6 +1938,7 @@ function autoBuy(shop) {
 /* ================= ЦИКЛ ================= */
 let last = 0, typeAcc = 0;
 function frame(ts) {
+  if (window.__manual) { last = ts; requestAnimationFrame(frame); return; }
   const raw = Math.min(.033, (ts - last) / 1000 || 0); last = ts;
   logic(raw); render();
   requestAnimationFrame(frame);
@@ -1960,7 +1961,7 @@ function logic(raw) {
   if (document.pointerLockElement && mode !== 'fight' && mode !== 'dlg' && mode !== 'title') document.exitPointerLock();
   if (mode === 'fight') {
     let dt = raw;
-    if (cine) { cine.t += raw; if (cine.t >= cine.dur) cine = null; dt = 0; }
+    if (cine) { cine.t += raw; if (cine.e.spawn > 0) cine.e.spawn -= raw; if (cine.t >= cine.dur) cine = null; dt = 0; }
     else if (P.fin && hitstop <= 0) updFin(raw);
     if (hitstop > 0) { hitstop -= raw; dt = 0; }
     if (slowmo > 0) { slowmo -= raw; dt *= .3; }
@@ -1990,6 +1991,7 @@ window.GOC = {
   god: () => { P.inv = 1e9; },
   all: () => { for (const w in WP) { S.wl[w] = 5; WP[w].skills.forEach(q => S.sk[q.id] = 1); } S.comp = 4; },
   tick: (n, nr) => { for (let i = 0; i < n; i++) logic(1 / 60); if (!nr) render(); },
+  full: () => { P.swag = 100; }, clearFx: () => { banners = []; txt = []; },
   sc: () => SC, r3: () => R3, mdl: () => MDL, ms: r => mergeSkinned(r),
   perf: n => { const t = []; for (let i = 0; i < n; i++) { logic(1 / 60); const a = performance.now(); render(); t.push(performance.now() - a); } t.sort((a, b) => a - b); const r = R3.info.render, m = R3.info.memory; return { avg: +(t.reduce((a, b) => a + b, 0) / n).toFixed(2), p95: +t[Math.floor(n * .95)].toFixed(2), calls: r.calls, tris: r.triangles, geo: m.geometries, tex: m.textures, objs: (() => { let c = 0; SC.traverse(() => c++); return c; })(), load: window.__loadMs, bake: window.__bake }; },
   dbg: () => ({ camYaw, camPit, camD, bt, slowmo, hitstop, aim: P.aim, dodge: P.dodge, dvx: P.dvx, chg: P.chg, inv: P.inv, sw: P.swag, fsr: fs && [fs.room.x, fs.room.w, fs.room.cx], T, obsBad: obs.filter(b => !(b.r === b.r) || !(b.x === b.x)).length }),

@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>trailer</title>
+<style>@font-face{font-family:"Russo One";src:url(RussoOne-Regular.ttf)}html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="v" width="1280" height="720"></canvas>
+<script>
+const W = 1280, H = 720, FPS = 30, LEN = 30;
+const SHOTS = [
+  { t0: 0, t1: 4, p: 'A', n: 120 }, { t0: 4, t1: 8, p: 'B', n: 129, from: 6 }, { t0: 8, t1: 12, p: 'C', n: 129, from: 6 },
+  { t0: 13, t1: 15, p: 'E', n: 60 }, { t0: 15, t1: 17, p: 'F', n: 60 }, { t0: 17, t1: 19, p: 'G', n: 78, from: 12 },
+  { t0: 19, t1: 21.8, p: 'H', n: 84 }, { t0: 21.8, t1: 24.3, p: 'I', n: 75 }];
+const VO = [['vo1', .4], ['vo2', 4.0], ['vo3', 7.9], ['vo4', 13.05], ['vo5', 15.05], ['vo6', 17.05], ['vo7', 19.5], ['vo8', 25.2]];
+const SPEECH = { vo1: [.24, 3.14], vo2: [.12, 4.08], vo3: [.14, 3.96], vo4: [.12, 1.08], vo5: [.12, 1.0], vo6: [.12, .86], vo7: [.12, 4.42], vo8: [.12, 1.26] };
+const HITS = [12, 13, 15, 17, 19, 24.3];
+const c = document.getElementById('v'), x = c.getContext('2d');
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v, ease = k => 1 - Math.pow(1 - clamp(k, 0, 1), 3);
+const blobs = {}, bmp = {}, pend = {};
+let keyart, icon, grain, lastBmp = null;
+
+function key(t) {
+  for (const s of SHOTS) if (t >= s.t0 && t < s.t1) { const i = clamp((s.from || 0) + Math.floor((t - s.t0) * FPS), 0, s.n - 1); return s.p + String(i).padStart(3, '0'); }
+  return null;
+}
+function want(t) {   // декодируем кадры на ~1.2 c вперёд, старые освобождаем
+  const need = new Set(); for (let d = 0; d < 1.2; d += 1 / FPS) { const k = key(t + d); if (k) need.add(k); }
+  for (const k of need) if (!bmp[k] && !pend[k] && blobs[k]) pend[k] = createImageBitmap(blobs[k]).then(b => { bmp[k] = b; delete pend[k]; });
+  for (const k in bmp) if (!need.has(k) && k !== key(t) && k !== lastBmp) { bmp[k].close(); delete bmp[k]; }
+}
+function txt(s, size, X, Y, o) {
+  o = o || {}; x.save(); x.font = size + 'px "Russo One"'; x.textAlign = o.align || 'left'; x.textBaseline = 'alphabetic'; x.globalAlpha = o.a == null ? 1 : o.a;
+  if (o.glow) { x.shadowColor = o.glow; x.shadowBlur = o.blur || 30; }
+  x.fillStyle = o.color || '#fff'; x.fillText(s, X, Y); x.restore();
+}
+function lower(s, sub, t, t0, t1) {    // титр внизу слева
+  if (t < t0 || t > t1) return; const a = clamp((t - t0) / .35, 0, 1) * clamp((t1 - t) / .35, 0, 1), sl = (1 - ease((t - t0) / .5)) * 60;
+  x.save(); x.globalAlpha = a; x.fillStyle = '#ff3b3b'; x.fillRect(70 - sl, 560, 6, sub ? 78 : 50); x.restore();
+  txt(s, 38, 92 - sl, 598, { a, glow: 'rgba(0,0,0,.9)', blur: 12 }); if (sub) txt(sub, 18, 94 - sl, 630, { a, color: '#ffb3a8' });
+}
+function slam(s, t, t0) {             // удар-заголовок по центру
+  const k = t - t0; if (k < 0 || k > 1.35) return; const sc = 1 + 0.9 * Math.pow(1 - ease(k / .18), 2), a = clamp(k / .06, 0, 1) * clamp((1.35 - k) / .3, 0, 1);
+  x.save(); x.translate(W / 2, H / 2 + 30); x.scale(sc, sc); txt(s, 112, 0, 0, { align: 'center', a, glow: '#ff2a2a', blur: 40 }); x.restore();
+}
+function draw(t) {
+  const k = key(t); let sh = 0; for (const h of HITS) if (t >= h && t < h + .35) sh = (1 - (t - h) / .35) * 14;
+  x.save(); x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+  if (sh) x.translate((Math.random() - .5) * sh, (Math.random() - .5) * sh);
+  if (k && bmp[k]) { x.drawImage(bmp[k], 0, 0, W, H); lastBmp = k; } else if (k && lastBmp && bmp[lastBmp]) x.drawImage(bmp[lastBmp], 0, 0, W, H);
+  x.restore();
+  if (t < 24.3) {
+    // цвет: лёгкий холод в тенях и тёплый центр, виньетка, плёночное зерно, кинорамка
+    x.save(); x.globalCompositeOperation = 'soft-light'; x.fillStyle = 'rgba(40,10,60,.35)'; x.fillRect(0, 0, W, H); x.restore();
+    const g = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.globalAlpha = .06; x.drawImage(grain, -Math.random() * 256, -Math.random() * 256); x.globalAlpha = 1;
+    x.fillStyle = '#000'; x.fillRect(0, 0, W, 44); x.fillRect(0, H - 44, W, 44);
+  }
+  // интро: проявление из черноты
+  if (t < .8) { x.fillStyle = `rgba(0,0,0,${1 - t / .8})`; x.fillRect(0, 0, W, H); }
+  lower('ТОМСК. ЯНВАРЬ. −34°', 'до релиза альбома — шесть часов', t, .5, 3.7);
+  lower('ВАНЁК back2u', 'и его кент madk1d', t, 4.4, 7.7);
+  if (t >= 8.2 && t < 11.9) {                       // обратный отсчёт до релиза
+    const left = 6 * 3600 - (t - 8.2) * 1800, hh = Math.floor(left / 3600), mm = Math.floor(left % 3600 / 60), ss = Math.floor(left % 60);
+    const a = clamp((t - 8.2) / .3, 0, 1) * clamp((11.9 - t) / .3, 0, 1);
+    txt('ДО РЕЛИЗА', 16, W - 70, 92, { align: 'right', a, color: '#ffb3a8' });
+    txt([hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':'), 44, W - 70, 138, { align: 'right', a, glow: '#ff2a2a', blur: 18 });
+  }
+  if (t >= 12 && t < 13) {                          // удар и тишина
+    x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+    const a = clamp((t - 12.08) / .15, 0, 1) * clamp((13 - t) / .2, 0, 1);
+    txt('ЗАБЕРИ ВСЁ ОБРАТНО', 64, W / 2, H / 2 + 22, { align: 'center', a, color: '#ff3b3b', glow: '#ff2a2a', blur: 30 });
+  }
+  slam('9 СЕРВЕРОВ', t, 13); slam('9 БОССОВ', t, 15); slam('1 БИТА', t, 17);
+  if (t >= 24.3) {                                  // логотип
+    const k2 = t - 24.3, z = 1.06 + k2 * .012;
+    x.save(); x.translate(W / 2, H / 2); x.scale(z, z); x.drawImage(keyart, -W / 2, -H / 2 - 10, W, W * keyart.height / keyart.width); x.restore();
+    x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, H);
+    const a1 = ease(k2 / .5), a2 = clamp((k2 - 2.5) / .5, 0, 1), a3 = clamp((k2 - 3.3) / .5, 0, 1);
+    x.save(); x.translate(110, 0);
+    txt('GOD', 64, 0, 250, { a: a1 }); txt('OF', 64, 170, 250, { a: a1, color: '#ff3b3b' });
+    txt('BACK2U', 150, -8, 392, { a: a1, glow: 'rgba(255,40,30,' + (.6 + .4 * Math.sin(k2 * 3)) + ')', blur: 50 });
+    txt('сага о кенте, голосе и девяти серверах', 22, 0, 440, { a: a2, color: '#d0d6e2' });
+    x.globalAlpha = a3; x.fillStyle = '#ff3b3b'; x.fillRect(0, 486, 420, 52); x.globalAlpha = 1;
+    txt('ИГРАТЬ БЕСПЛАТНО', 26, 22, 522, { a: a3 });
+    txt('github.com/jelos8vetoi/god-of-back2u', 18, 0, 572, { a: a3, color: '#ffd23b' });
+    x.restore();
+    if (k2 < .4) { x.fillStyle = `rgba(255,255,255,${.85 * (1 - k2 / .4)})`; x.fillRect(0, 0, W, H); }
+    if (t > LEN - .6) { x.fillStyle = `rgba(0,0,0,${(t - (LEN - .6)) / .6})`; x.fillRect(0, 0, W, H); }
+  }
+  for (const h of [13, 15, 17, 19]) if (t >= h && t < h + .12) { x.fillStyle = `rgba(255,255,255,${.7 * (1 - (t - h) / .12)})`; x.fillRect(0, 0, W, H); }
+}
+
+async function load() {
+  await document.fonts.load('40px "Russo One"');
+  const img = async u => { const i = new Image(); i.src = u; await i.decode(); return i; };
+  keyart = await img('keyart.jpg'); icon = await img('icon.png');
+  grain = document.createElement('canvas'); grain.width = grain.height = W + 256; { const g = grain.getContext('2d'), d = g.createImageData(grain.width, grain.height); for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; } g.putImageData(d, 0, 0); }
+  const jobs = []; for (const s of SHOTS) for (let i = 0; i < s.n; i++) { const k = s.p + String(i).padStart(3, '0'); jobs.push(fetch('frames/' + k + '.jpg').then(r => r.blob()).then(b => blobs[k] = b)); }
+  await Promise.all(jobs);
+}
+
+async function record(dry) {
+  await load();
+  const ac = new AudioContext({ sampleRate: 48000 }), dest = ac.createMediaStreamDestination();
+  const dec = async u => ac.decodeAudioData(await (await fetch(u)).arrayBuffer());
+  const music = await dec('music.wav'), vo = {}; for (const [n] of VO) vo[n] = await dec(n + '.wav');
+  // голос: тёплый низ, компрессия, немного зала
+  const bus = ac.createDynamicsCompressor(); bus.threshold.value = -8; bus.knee.value = 6; bus.ratio.value = 12; bus.attack.value = .003; bus.release.value = .2;
+  const out = ac.createGain(); out.gain.value = .9; bus.connect(out); out.connect(dest);
+  const vin = ac.createGain(); vin.gain.value = 1.6;
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70;
+  const low = ac.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 220; low.gain.value = 5;
+  const pres = ac.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3200; pres.gain.value = 3; pres.Q.value = .8;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -24; comp.ratio.value = 4; comp.attack.value = .005; comp.release.value = .15;
+  const conv = ac.createConvolver(); { const n = ac.sampleRate * 1.3, ir = ac.createBuffer(2, n, ac.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); } conv.buffer = ir; }
+  const wet = ac.createGain(); wet.gain.value = .16;
+  vin.connect(hp); hp.connect(low); low.connect(pres); pres.connect(comp); comp.connect(bus); comp.connect(conv); conv.connect(wet); wet.connect(bus);
+  const mg = ac.createGain(); mg.gain.value = .9; mg.connect(bus);
+  const T0 = ac.currentTime + .4;
+  const ms = ac.createBufferSource(); ms.buffer = music; ms.connect(mg); ms.start(T0);
+  for (const [n, at] of VO) {
+    const s = ac.createBufferSource(); s.buffer = vo[n]; s.connect(vin); s.start(T0 + at);
+    const [a, b] = SPEECH[n]; mg.gain.setTargetAtTime(.42, T0 + at + a - .12, .05); mg.gain.setTargetAtTime(.9, T0 + at + b + .05, .25);
+  }
+  const vtrack = c.captureStream(0).getVideoTracks()[0];
+  const stream = new MediaStream([vtrack, dest.stream.getAudioTracks()[0]]);
+  const mime = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01F,mp4a.40.2', 'video/mp4'].find(m => MediaRecorder.isTypeSupported(m));
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 9e6, audioBitsPerSecond: 192000 }), chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const done = new Promise(r => rec.onstop = r);
+  let frames = 0, missing = 0, lastF = -1;
+  rec.start(1000);
+  await new Promise(res => {
+    const loop = () => {
+      const t = ac.currentTime - T0;
+      if (t >= LEN + .1) { res(); return; }
+      if (t >= 0) { const fi = Math.floor(t * FPS); if (fi !== lastF) { lastF = fi; want(t); const k = key(t); if (k && !bmp[k]) missing++; draw(t); vtrack.requestFrame(); frames++; } else want(t); } else { x.fillStyle = '#000'; x.fillRect(0, 0, W, H); want(0); }
+      requestAnimationFrame(loop);
+    };
+    loop();
+  });
+  rec.stop(); await done;
+  const blob = new Blob(chunks, { type: mime });
+  const r = await fetch('/__save?name=trailer.mp4', { method: 'PUT', body: blob });
+  return { mime, frames, missing, mb: +(blob.size / 1048576).toFixed(1), saved: await r.text() };
+}
+window.record = record;
+</script></body></html>
