@@ -115,7 +115,8 @@ const EN = {
 
 const BOSS = {
   courier: { n: 'LIL DREY', sub: 'курьер Алгоритма', sp: 'B1', hp: 620, r: 28, spd: 125, c: '#cfd6e6', dmg: 13, gap: 1.7, xp: 400,
-    phases: [['slam', 'fan', 'mines'], ['slam', 'fan', 'charge', 'mines']], barks: ['', 'Доставка будет вручена. Лично.'] },
+    phases: [['slam', 'fan', 'charge'], ['slam', 'charge', 'mines'], ['charge', 'mines', 'homing', 'slam']],
+    barks: ['', 'Адрес подтверждён.', 'Доставка будет вручена. Лично.'] },
   golem: { n: 'ПЕРВЫЙ КОРОЛЬ', sub: 'король Подземки', sp: 'B2', hp: 950, r: 42, spd: 80, c: '#c79a5a', dmg: 17, gap: 1.6, xp: 550,
     phases: [['slam', 'leap', 'shock'], ['slam', 'leap', 'burst', 'shock'], ['leap', 'burst', 'rain', 'shock']], barks: ['', 'Подземка — моя.', 'Корону не отдают. Её забирают.'] },
   hype: { n: 'ЛЕДИ ХАЙП', sub: 'богиня пятнадцати секунд', sp: 'B3', hp: 1150, r: 26, spd: 170, c: '#ff5cc8', dmg: 16, gap: 1.3, xp: 700,

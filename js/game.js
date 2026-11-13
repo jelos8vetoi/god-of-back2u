@@ -636,6 +636,10 @@ function spawnBoss(id) {
   const b = { type: id, d, boss: true, ai: 'boss', x: fs.room.cx, y: fs.room.cy - fs.room.h * .3, r: d.r, hp: d.hp * 1.3 * (1 + S.ch * .3 + Math.max(0, S.ch - 4) * .4), maxhp: d.hp * 1.3 * (1 + S.ch * .3 + Math.max(0, S.ch - 4) * .4), dmg: d.dmg * 1.12 * (1 + S.ch * .1 + Math.max(0, S.ch - 4) * .08), spd: d.spd, c: d.c,
     state: 'idle', t: 0, cdT: 1.6, aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: 1.2, fl: 0, xp: Math.round(d.xp * .6), ph: 0, mv: '', last: '', spiral: null, say: '', sayT: 0, tx: 0, ty: 0 };
   if (S.ng) { b.hp = b.maxhp = b.hp * (1 + S.ng * .6); b.dmg *= 1 + S.ng * .35; }
+  if (id === 'courier') {
+    b.hp *= [1, 1.55, 1.8][S.diff] ?? 1.55;
+    b.maxhp = b.hp;
+  }
   ens.push(b); fs.boss = b; cine = { t: 0, dur: 3, e: b };
 }
 
@@ -1000,6 +1004,10 @@ function updBoss(e, dt) {
         const list = e.d.phases[ph]; let m = list[Math.floor(rnd(0, list.length))];
         if (m === e.last) m = list[(list.indexOf(m) + 1) % list.length];
         if (m === 'slam' && d > 260) m = list.includes('leap') ? 'leap' : (list.find(q => q !== 'slam') || 'slam');
+        if (e.type === 'courier' && d > 320) {
+          const ranged = ph === 2 ? 'homing' : ph === 1 ? 'mines' : 'fan';
+          m = e.last === 'charge' ? ranged : 'charge';
+        }
         if (T - (e.lastVoiceAt ?? -Infinity) >= 2.5) bossSpeech(e, BOSS_ATTACK_LINES[m]);
         e.mv = e.last = m; e.state = 'wind'; e.t = WIND[m]; e.aa = a; e.tx = P.x; e.ty = P.y; e.cdT = e.d.gap / mad;
       }
@@ -1010,7 +1018,7 @@ function bossExec(e) {
   switch (e.mv) {
     case 'slam': ring(e.x, e.y, e.r + 130, e.c); shake = 12; sfx.boom(); if (dist(e, P) < e.r + 130 + P.r * .5) hurtP(dm * 1.3, e); rec = .7; break;
     case 'leap': burst(e.x, e.y, e.c, 12); e.x = e.tx; e.y = e.ty; ring(e.x, e.y, 140, e.c); shake = 14; sfx.boom(); if (dist(e, P) < 140 + P.r * .5) hurtP(dm * 1.4, e); rec = .8; break;
-    case 'charge': e.state = 'dash'; e.t = .6; e.hitP = false; return;
+    case 'charge': e.state = 'dash'; e.t = e.type === 'courier' ? .9 : .6; e.hitP = false; return;
     case 'fan': { const n = 5 + e.ph * 2; for (let i = 0; i < n; i++) mkP(e.x, e.y, ang(e, P) + (i - (n - 1) / 2) * .16, 390, dm * .8, { col: e.c }); sfx.shoot(); break; }
     case 'burst': { const n = 14 + e.ph * 2, o = rnd(0, TAU); for (let i = 0; i < n; i++) mkP(e.x, e.y, o + i * TAU / n, 265, dm * .8, { col: e.c }); sfx.shoot(); break; }
     case 'spiral': e.spiral = { n: 20 + e.ph * 4, t: 0, a: rnd(0, TAU) }; rec = 1.3; break;
@@ -1030,6 +1038,15 @@ function bossExec(e) {
     case 'mines': for (let i = 0; i < 5 + e.ph; i++) { const t = 1.5 + i * .2, a = rnd(0, TAU), d = rnd(30, 250); haz.push({ x: RX(P.x + Math.cos(a) * d, 40), y: RY(P.y + Math.sin(a) * d, 40), r: 72, t, mt: t, dmg: dm, col: e.c }); } sfx.shoot(); break;
     case 'shock': { const mkw = () => { if (!e.dead) { waves.push({ x: e.x, y: e.y, r: e.r, v: 520, dmg: dm * .9, max: 780, c: e.c }); sfx.boom(); shake = Math.max(shake, 8); } }; mkw(); if (e.ph >= 2) timers.push({ t: .7, f: mkw }); rec = .8; break; }
     case 'beam': { const dir = Math.random() < .5 ? 1 : -1; e.beam = { a: ang(e, P) - dir * 1.25, dir, t: 2.2 }; sfx.rage(); rec = 2.3; break; }
+  }
+  if (e.type === 'courier' && e.mv === 'mines') {
+    const a = ang(e, P);
+    const offsets = e.ph === 2 ? [0, 145] : [0];
+    for (const offset of offsets) {
+      const t = .85 + offset / 500;
+      haz.push({ x: RX(P.x + Math.cos(a) * offset, 35), y: RY(P.y + Math.sin(a) * offset, 35),
+        r: 105, t, mt: t, dmg: dm * 1.2, col: '#ff8754' });
+    }
   }
   e.state = 'rec'; e.t = rec;
 }
