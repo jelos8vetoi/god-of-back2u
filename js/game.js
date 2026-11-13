@@ -371,8 +371,9 @@ function startEnc(room, waves, bossId, cb) {
   if (tomskOpening(room)) fs.training = true;
   if (tomskArch(room)) {
     fs.arch = true;
-    if (S.diff === 0) fs.waves = fs.waves.slice(0, 1);
-    toast('Держи ' + KN('sprint') + ', чтобы перебежать за укрытие', 5);
+    fs.surv = 60;
+    fs.spT = 6;
+    toast('Продержись минуту · укрывайся от залпов за бетонными блоками', 5);
   }
   if (fs.training) openTomskGuide();
   else if (bossId) spawnBoss(bossId); else spawnWave();
@@ -609,12 +610,6 @@ function mkEnemy(type, x, y) {
 function spawnWave() {
   if (fs.arch) {
     const { cx, cy } = fs.room;
-    if (fs.i === 1) {
-      ens.push(mkEnemy('bot', cx - 430, cy - 245), mkEnemy('bot', cx + 230, cy + 285),
-        mkEnemy('bot', cx - 300, cy + 255), mkEnemy('hater', cx + 390, cy - 245));
-      toast('Подкрепление с двух сторон', 3);
-      return;
-    }
     ens.push(mkEnemy('bot', cx - 55, cy - 175), mkEnemy('bot', cx + 85, cy + 55));
     const hater = mkEnemy('hater', cx + 375, cy - 20);
     hater.guardPost = true;
@@ -1116,9 +1111,20 @@ function update(dt) {
   updFx(dt);
   // волны
   if (fs && !fs.done && fs.traps) { fs.trT -= dt; if (fs.trT <= 0) { fs.trT = 5.5; for (const t of fs.traps) haz.push({ x: t.x, y: t.y, r: 95, t: 1.3, mt: 1.3, dmg: 13 * (1 + S.ch * .12), col: '#ffb03b', both: 1 }); } }
-  if (fs && !fs.done && fs.surv > 0) {
-    fs.surv -= dt; fs.spT = (fs.spT || 0) - dt;
-    if (fs.spT <= 0 && ens.length < 12) { fs.spT = 2.4; for (let i = 0; i < 2 + (S.ch > 4 ? 1 : 0); i++) { const p = edgePos(); ens.push(mkEnemy(fs.pool[Math.floor(Math.random() * fs.pool.length)], p.x, p.y)); } }
+  if (fs && !fs.done && fs.surv != null) {
+    if (!fs.arch) fs.surv -= dt;
+    fs.spT = (fs.spT || 0) - dt;
+    if (fs.arch) {
+      if (fs.surv > 0 && fs.spT <= 0) {
+        fs.spT = [8, 6, 5][S.diff] ?? 6;
+        const limit = [4, 6, 8][S.diff] ?? 6;
+        for (let i = 0; i < (S.diff === 0 ? 1 : 2) && ens.length < limit; i++) {
+          const p = edgePos();
+          const ranged = i === 0 && fs.surv <= 40 && !ens.some(e => e.type === 'hater');
+          ens.push(mkEnemy(ranged ? 'hater' : 'bot', p.x, p.y));
+        }
+      }
+    } else if (fs.spT <= 0 && ens.length < 12) { fs.spT = 2.4; for (let i = 0; i < 2 + (S.ch > 4 ? 1 : 0); i++) { const p = edgePos(); ens.push(mkEnemy(fs.pool[Math.floor(Math.random() * fs.pool.length)], p.x, p.y)); } }
     if (fs.surv <= 0) { for (const q of ens) { q.dead = true; burst(q.x, q.y, q.c, 8); } fs.done = true; fs.clearT = 1.4; float(P.x, P.y - 60, 'ВЫЖИЛ', '#7dff7d', 1); sfx.buy(); }
   } else if (fs && !fs.done && ens.length === 0) {
     if (tomskDrillPending()) {
@@ -1501,7 +1507,7 @@ function drawNav() {
   X.textBaseline = 'alphabetic';
   // цель
   let ob = '';
-  if (fs?.arch && !fs.done) ob = 'Зачисти проход к арке · осталось: ' + ens.filter(e => !e.dead).length;
+  if (fs?.arch && !fs.done) ob = 'Продержись у арки до конца отсчёта';
   else if (fs && !fs.done) ob = fs.boss ? 'Победи: ' + fs.boss.d.n : (fs.cb && fs.room.kind === 'side' ? 'Зачисти тупик' : 'Зачисти комнату');
   else if (exitOpen()) ob = 'Войди в портал — к следующему серверу';
   else if (tomskOpening(objRoom)) ob = 'Выйди во двор';
@@ -1834,7 +1840,10 @@ function drawHud() {
     gbar(W / 2 - 370, 46, 730, 14, bv, hud.bhp, '#5a0d14', b.c);
     const L = b.d.phases.length; X.fillStyle = 'rgba(0,0,0,.85)'; for (let j = 1; j < L; j++) X.fillRect(W / 2 - 370 + 730 * (1 - j / L) + 3, 44, 3, 18);
     X.font = '12px ' + FONT; X.fillStyle = '#9fb0c8'; X.fillText(b.d.sub, W / 2, 82);
-  } else if (fs && fs.surv > 0 && !fs.done) { X.font = '22px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 6; X.fillStyle = fs.surv < 10 ? '#7dff7d' : '#ffd23b'; X.fillText('⏱ ВЫЖИВИ  0:' + String(Math.ceil(fs.surv)).padStart(2, '0'), W / 2, 34); X.shadowBlur = 0;
+  } else if (fs && fs.surv != null && !fs.done) {
+    const seconds = Math.max(0, Math.ceil(fs.surv));
+    const time = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    X.font = '22px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 6; X.fillStyle = fs.surv < 10 ? '#7dff7d' : '#ffd23b'; X.fillText('⏱ ВЫЖИВИ  ' + time, W / 2, 34); X.shadowBlur = 0;
   } else if (fs && fs.waves && !fs.done) { if (fs.mut) { X.font = '12px ' + FONT; X.fillStyle = '#ff5cc8'; X.fillText('МУТАТОР: ' + MUTS[fs.mut][0], W / 2, 50); }
     X.font = '15px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 6; X.fillStyle = '#fff'; X.fillText('ВОЛНА ' + (fs.i + 1) + ' / ' + fs.waves.length + '   ·   врагов: ' + ens.length, W / 2, 30); X.shadowBlur = 0; }
   { const st = P.style || 0, ix = Math.min(6, Math.floor(st));
@@ -2390,6 +2399,7 @@ function logic(raw) {
   if (document.pointerLockElement && mode !== 'fight' && mode !== 'dlg' && mode !== 'title') document.exitPointerLock();
   if (mode === 'fight') {
     let dt = raw;
+    if (fs?.arch && !fs.done) fs.surv -= raw;
     if (cine) { cine.t += raw; if (cine.e.spawn > 0) cine.e.spawn -= raw; if (cine.t >= cine.dur) cine = null; dt = 0; }
     else if (P.fin && hitstop <= 0) updFin(raw);
     if (hitstop > 0) { hitstop -= raw; dt = 0; }
