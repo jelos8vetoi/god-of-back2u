@@ -188,7 +188,6 @@ let fs = null, comp = { x: 0, y: 0, say: '', sayT: 0 };
 let titleT = 0, titleCb = null, toastT = 0, shownTitle = -1, upShop = false, upPrev = 'fight';
 const K = {}, M = { x: W / 2, y: H / 2, l: false, r: false };
 let bt = 0, camYaw = -Math.PI / 2, camPit = .36, camD = 270, obs = [], fpsA = 60, qual = 2, qT = 0;
-const FIST = { dmg: 9, range: 58, arc: 1.7, wind: .06, dur: .17, cd: .04, kb: 90 };
 const lock = () => { try { if (document.pointerLockElement !== C && C.requestPointerLock) { const p = C.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } } catch (e) {} };
 function inputDir() { const ix = (K[KM.right] ? 1 : 0) - (K[KM.left] ? 1 : 0), iy = (K[KM.up] ? 1 : 0) - (K[KM.down] ? 1 : 0), c = Math.cos(camYaw), s = Math.sin(camYaw); return [c * iy - s * ix, s * iy + c * ix]; }
 function pushOut(o, r) { for (const b of obs) { const dx = o.x - b.x, dy = o.y - b.y, m = b.r + r, d2 = dx * dx + dy * dy; if (d2 < m * m && d2 > .01) { const d = Math.sqrt(d2); o.x = b.x + dx / d * m; o.y = b.y + dy / d * m; } } }
@@ -646,9 +645,12 @@ function spawnBoss(id) {
 /* ================= БОЙ: ИГРОК ================= */
 function tryAtk(heavy, c) {
   if (P.atk || P.acd > 0 || P.dodge > 0 || P.spin > 0) return;
-  const w = S.weapon, fist = w === 'bat' && P.thr;
-  if (fist && heavy) { doThrow(); return; }
-  const d = fist ? FIST : WP[w][heavy ? 'heavy' : 'light'];
+  const w = S.weapon;
+  if (w === 'bat' && P.thr) {
+    if (heavy) doThrow();
+    return;
+  }
+  const d = WP[w][heavy ? 'heavy' : 'light'];
   if (!heavy) P.combo = (T - P.lastAtk < .8) ? P.combo + 1 : 1; else P.combo = 0;
   P.lastAtk = T; P.acount++;
   const full = heavy && c >= .95, sw = P.swT > 0, crit = P.crit > 0;
@@ -1986,7 +1988,7 @@ function render() {
     else if (P.hurtT > 0) play(pg, 'hitB', true, .35, 'h');
     else if (P.block) play(pg, 'block');
     else if (P.spin > 0) play(pg, 'ms', false, .45);
-    else if (a) play(pg, a.d === FIST ? (cb === 0 ? 'kick' : cb === 1 ? 'p1' : 'p2') : a.w === 'bat' ? (a.heavy ? 'bh' : cb === 0 ? 'b3' : 'b1') : a.w === 'mic' ? (a.heavy ? 'mh' : cb === 0 ? 'm3' : cb === 1 ? 'm1' : 'm2') : (a.heavy ? 'vh' : 'v1'), true, Math.max(a.dur * 1.25, a.wind / .4), a.n);
+    else if (a) play(pg, a.w === 'bat' ? (a.heavy ? 'bh' : cb === 0 ? 'b3' : 'b1') : a.w === 'mic' ? (a.heavy ? 'mh' : cb === 0 ? 'm3' : cb === 1 ? 'm1' : 'm2') : (a.heavy ? 'vh' : 'v1'), true, Math.max(a.dur * 1.25, a.wind / .4), a.n);
     else if (P.chg > .15) play(pg, 'bi');
     else if (mode === 'fight' && P.mv) play(pg, 'run');
     else play(pg, w === 'bat' && !P.thr && fs ? 'bi' : 'idle');
