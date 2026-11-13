@@ -1,4 +1,4 @@
-// Рисование иконки GOD OF BACK2U на canvas (запускать в странице игры, где загружен шрифт Russo One).
+// Рисование иконки GOD OF GRIMERKA на canvas (запускать в странице игры, где загружен шрифт Russo One).
 // drawIcon(размер, упрощённо) → canvas
 window.drawIcon = (S,small)=>{const c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d');const s=S/256;x.scale(s,s);
 const rr=(X,Y,W,H,R)=>{x.beginPath();x.moveTo(X+R,Y);x.arcTo(X+W,Y,X+W,Y+H,R);x.arcTo(X+W,Y+H,X,Y+H,R);x.arcTo(X,Y+H,X,Y,R);x.arcTo(X,Y,X+W,Y,R);x.closePath();};
@@ -21,6 +21,6 @@ x.fillStyle='#49e0ff';x.fillRect(-15,-40,30,8);
 x.beginPath();x.arc(0,-66,32,0,Math.PI*2);let hg=x.createRadialGradient(-10,-78,4,0,-66,34);hg.addColorStop(0,'#ffffff');hg.addColorStop(.45,'#c8ccd6');hg.addColorStop(1,'#5f6573');x.fillStyle=hg;x.fill();x.stroke();
 if(!small){x.save();x.beginPath();x.arc(0,-66,30,0,Math.PI*2);x.clip();x.strokeStyle='rgba(30,34,44,.55)';x.lineWidth=1.4;for(let i=-34;i<34;i+=6){x.beginPath();x.moveTo(i,-100);x.lineTo(i,-30);x.stroke();x.beginPath();x.moveTo(-34,-66+i);x.lineTo(34,-66+i);x.stroke();}x.restore();x.beginPath();x.arc(0,-66,32,0,Math.PI*2);x.stroke();}
 x.restore();
-if(!small){x.textAlign='center';x.textBaseline='alphabetic';x.font='64px "Russo One"';x.lineJoin='round';x.lineWidth=12;x.strokeStyle='#14020a';x.strokeText('B2U',128,232);let tg=x.createLinearGradient(0,186,0,234);tg.addColorStop(0,'#ffffff');tg.addColorStop(1,'#ffd0c4');x.fillStyle=tg;x.shadowColor='rgba(255,60,40,.9)';x.shadowBlur=16;x.fillText('B2U',128,232);x.shadowBlur=0;}
+if(!small){x.textAlign='center';x.textBaseline='alphabetic';x.font='58px "Russo One"';x.lineJoin='round';x.lineWidth=12;x.strokeStyle='#14020a';x.strokeText('GRIM',128,232);let tg=x.createLinearGradient(0,186,0,234);tg.addColorStop(0,'#ffffff');tg.addColorStop(1,'#ffd0c4');x.fillStyle=tg;x.shadowColor='rgba(255,60,40,.9)';x.shadowBlur=16;x.fillText('GRIM',128,232);x.shadowBlur=0;}
 x.restore();rr(m,m,256-2*m,256-2*m,small?44:54);x.lineWidth=small?6:4;x.strokeStyle='rgba(255,255,255,.22)';x.stroke();
 return c;};

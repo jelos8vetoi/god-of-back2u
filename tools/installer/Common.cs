@@ -1,4 +1,4 @@
-// Общий код лаунчера и установщика GOD OF BACK2U (C# 5, .NET Framework 4.x — есть в любой Windows 10/11).
+// Общий код лаунчера и установщика GOD OF GRIMERKA (C# 5, .NET Framework 4.x — есть в любой Windows 10/11).
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -6,15 +6,15 @@ using System.Reflection;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace Back2U
+namespace Grimerka
 {
     static class App
     {
-        public const string Name = "GOD OF BACK2U";
-        public const string Version = "1.1";
-        public const string ExeName = "GOD OF BACK2U.exe";
-        public const string Marker = "back2u.installed";
-        public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\GOD OF BACK2U";
+        public const string Name = "GOD OF GRIMERKA";
+        public const string Version = "1.2";
+        public const string ExeName = "GOD OF GRIMERKA.exe";
+        public const string Marker = "grimerka.installed";
+        public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\GOD OF GRIMERKA";
 
         static string Local { get { return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData); } }
         public static string DefaultDir { get { return Path.Combine(Path.Combine(Local, "Programs"), Name); } }
@@ -78,7 +78,7 @@ namespace Back2U
                 k.SetValue("InstallLocation", dir);
                 k.SetValue("UninstallString", "\"" + exe + "\" /uninstall");
                 k.SetValue("QuietUninstallString", "\"" + exe + "\" /uninstall /S");
-                k.SetValue("URLInfoAbout", "https://github.com/jelos8vetoi/god-of-back2u");
+                k.SetValue("URLInfoAbout", "https://github.com/jelos8vetoi/god-of-grimerka");
                 k.SetValue("EstimatedSize", (int)kb, RegistryValueKind.DWord);
                 k.SetValue("NoModify", 1, RegistryValueKind.DWord);
                 k.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -130,10 +130,10 @@ namespace Back2U
             // защита: удаляем только папку, в которой лежит наш маркер установки
             if (!File.Exists(Path.Combine(dir, App.Marker)))
             {
-                if (!silent) MessageBox.Show("Эта папка не похожа на установку GOD OF BACK2U — ничего не удалено.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (!silent) MessageBox.Show("Эта папка не похожа на установку GOD OF GRIMERKA — ничего не удалено.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return 2;
             }
-            if (!silent && MessageBox.Show("Удалить GOD OF BACK2U с этого компьютера?", App.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
+            if (!silent && MessageBox.Show("Удалить GOD OF GRIMERKA с этого компьютера?", App.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
             bool purge = App.Has(a, "/purge") || (!silent && MessageBox.Show("Удалить ещё и сохранения (прогресс игры)?\n\n«Нет» — сохранения останутся и подхватятся при повторной установке.", App.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes);
 
             if (!App.Has(a, "/noshortcuts")) { App.TryDel(App.DesktopLnk); App.TryDel(App.StartLnk); }
@@ -146,7 +146,7 @@ namespace Back2U
             ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/c ping 127.0.0.1 -n 3 > nul & del /f /q \"" + Path.Combine(dir, App.ExeName) + "\" & rmdir \"" + dir + "\"");
             psi.CreateNoWindow = true; psi.UseShellExecute = false; psi.WindowStyle = ProcessWindowStyle.Hidden;
             Process.Start(psi);
-            if (!silent) MessageBox.Show("GOD OF BACK2U удалена." + (purge ? "" : "\nСохранения остались на месте."), App.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!silent) MessageBox.Show("GOD OF GRIMERKA удалена." + (purge ? "" : "\nСохранения остались на месте."), App.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
     }

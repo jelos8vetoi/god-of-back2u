@@ -1,4 +1,5 @@
-// Установщик GOD OF BACK2U. Игра лежит внутри exe как ресурс game.zip.
+﻿// Установщик GOD OF GRIMERKA. Игра лежит внутри exe как ресурс game.zip.
+// Пока окно открыто, играет музыка из ресурса installer.mp3 (если он вшит при сборке).
 // Ключи: /S — тихая установка, /D=папка, /noshortcuts, /noreg, /norun, /shot=файл.png [/done] — снимок окна (для проверки).
 using System;
 using System.Diagnostics;
@@ -12,7 +13,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace Back2U
+namespace Grimerka
 {
     static class SetupMain
     {
@@ -30,7 +31,7 @@ namespace Back2U
                 }
                 catch (Exception e)
                 {
-                    File.WriteAllText(Path.Combine(Path.GetTempPath(), "back2u-setup.log"), e.ToString());
+                    File.WriteAllText(Path.Combine(Path.GetTempPath(), "grimerka-setup.log"), e.ToString());
                     return 1;
                 }
             }
@@ -55,6 +56,29 @@ namespace Back2U
     {
         public static Stream Res(string name) { return Assembly.GetExecutingAssembly().GetManifestResourceStream(name); }
 
+        // игра раньше называлась GOD OF BACK2U: сохранения (профиль браузера) переносим, старую копию тихо удаляем
+        const string OldName = "GOD OF BACK2U", OldKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + OldName;
+        public static bool OldInstalled() { using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(OldKey)) return k != null; }
+        static void MigrateOld()
+        {
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), oldData = Path.Combine(local, OldName);
+            try { if (Directory.Exists(oldData) && !Directory.Exists(App.DataDir)) Directory.Move(oldData, App.DataDir); } catch { }
+            try
+            {
+                string oldDir = null;
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(OldKey))
+                    if (k != null) oldDir = k.GetValue("InstallLocation") as string;
+                string oldExe = oldDir == null ? null : Path.Combine(oldDir, OldName + ".exe");
+                if (oldExe != null && File.Exists(oldExe))
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo(oldExe, "/uninstall /S"); psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                    using (Process p = Process.Start(psi)) p.WaitForExit(15000);
+                }
+                else Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(OldKey, false);
+            }
+            catch { }
+        }
+
         public static long PackedSize()
         {
             long t = 0;
@@ -67,6 +91,7 @@ namespace Back2U
         public static long Install(string dir, bool desktop, bool start, bool reg, Action<int, string> progress)
         {
             dir = Path.GetFullPath(dir).TrimEnd('\\');
+            MigrateOld();
             Directory.CreateDirectory(dir);
             string game = Path.Combine(dir, "game");
             // обновление: старые файлы игры убираем целиком, сохранения лежат отдельно и не трогаются
@@ -104,6 +129,33 @@ namespace Back2U
         public BufferedPanel() { DoubleBuffered = true; ResizeRedraw = true; }
     }
 
+    static class Bgm
+    {
+        [DllImport("winmm.dll", CharSet = CharSet.Unicode)] static extern int mciSendString(string cmd, System.Text.StringBuilder ret, int len, IntPtr cb);
+        static string file; static bool open; public static bool Muted;
+        static string Q(string c) { System.Text.StringBuilder sb = new System.Text.StringBuilder(128); mciSendString(c, sb, 128, IntPtr.Zero); return sb.ToString(); }
+        public static bool Start()
+        {
+            try
+            {
+                using (Stream s = Installer.Res("installer.mp3"))
+                {
+                    if (s == null) return false;
+                    file = Path.Combine(Path.GetTempPath(), "grimerka-setup-" + Process.GetCurrentProcess().Id + ".mp3");
+                    using (FileStream o = File.Create(file)) s.CopyTo(o);
+                }
+                if (mciSendString("open \"" + file + "\" type mpegvideo alias bgm", null, 0, IntPtr.Zero) != 0) return false;
+                open = true; mciSendString("setaudio bgm volume to 700", null, 0, IntPtr.Zero); mciSendString("play bgm", null, 0, IntPtr.Zero);
+                return true;
+            }
+            catch { return false; }
+        }
+        // по кругу: когда трек закончился — с начала
+        public static void Tick() { if (open && !Muted && Q("status bgm mode") == "stopped") mciSendString("play bgm from 0", null, 0, IntPtr.Zero); }
+        public static void Toggle() { if (!open) return; Muted = !Muted; mciSendString(Muted ? "pause bgm" : "resume bgm", null, 0, IntPtr.Zero); }
+        public static void Stop() { if (open) { mciSendString("close bgm", null, 0, IntPtr.Zero); open = false; } try { if (file != null) File.Delete(file); } catch { } }
+    }
+
     // полоса прогресса в цветах игры (системная светлая выбивается из тёмного окна)
     class RedBar : Control
     {
@@ -121,7 +173,7 @@ namespace Back2U
     {
         static readonly Color BG = Color.FromArgb(11, 13, 19), PANEL = Color.FromArgb(22, 26, 38), RED = Color.FromArgb(255, 59, 59),
             TXT = Color.FromArgb(232, 236, 244), DIM = Color.FromArgb(141, 151, 170), LINE = Color.FromArgb(48, 54, 72);
-        TextBox path; CheckBox cDesk, cStart, cRun; Button bInst, bCancel, bBrowse; RedBar bar; Label status, info, lPath;
+        TextBox path; CheckBox cDesk, cStart, cRun; Button bInst, bCancel, bBrowse, bMus; System.Windows.Forms.Timer mt; RedBar bar; Label status, info, lPath;
         BufferedPanel banner; Image icon; FontFamily ru; bool noreg, done, busy; string doneDir;
 
         public SetupForm(string dir, bool noreg)
@@ -150,16 +202,25 @@ namespace Back2U
             cDesk = Chk("Ярлык на рабочем столе", 264); cStart = Chk("Ярлык в меню «Пуск»", 291); cRun = Chk("Запустить игру после установки", 318);
             long mb = Math.Max(1, Installer.PackedSize() / 1048576);
             info = new Label(); info.Location = new Point(30, 352); info.Size = new Size(600, 40); info.ForeColor = DIM;
-            info.Text = (App.Installed() ? "Найдена установленная версия — она обновится, сохранения останутся.\n" : "Займёт около " + mb + " МБ. Права администратора не нужны.\n")
+            info.Text = (Installer.OldInstalled() && !App.Installed() ? "Найдена старая GOD OF BACK2U — заменим на GRIMERKA, сохранения перенесём.\n" : App.Installed() ?"Найдена установленная версия — она обновится, сохранения останутся.\n" : "Займёт около " + mb + " МБ. Права администратора не нужны.\n")
                 + "Игра откроется в отдельном окне Microsoft Edge — он уже есть в Windows.";
             bar = new RedBar(); bar.Location = new Point(30, 358); bar.Size = new Size(600, 6); bar.Visible = false;
             status = new Label(); status.Location = new Point(30, 370); status.Size = new Size(600, 22); status.ForeColor = DIM; status.Visible = false;
-            bInst = Btn("Установить", new Point(398, 404), new Size(132, 34), true); bInst.Click += Go;
+            bInst = Btn("УСТАНОВИТЬ", new Point(398, 404), new Size(132, 34), true); bInst.Click += Go;
             bCancel = Btn("Отмена", new Point(538, 404), new Size(92, 34), false); bCancel.Click += delegate { if (!busy) Close(); };
-            Controls.AddRange(new Control[] { banner, lPath, path, bBrowse, cDesk, cStart, cRun, info, bar, status, bInst, bCancel });
+            bMus = Btn("♪  Музыка: вкл", new Point(30, 404), new Size(150, 34), false); bMus.Visible = false;
+            bMus.Click += delegate { Bgm.Toggle(); bMus.Text = Bgm.Muted ? "♪  Музыка: выкл" : "♪  Музыка: вкл"; };
+            Controls.AddRange(new Control[] { banner, lPath, path, bBrowse, cDesk, cStart, cRun, info, bar, status, bInst, bCancel, bMus });
             AcceptButton = bInst; ActiveControl = bInst;
             AutoScaleDimensions = new SizeF(96F, 96F); AutoScaleMode = AutoScaleMode.Dpi;
         }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            if (Bgm.Start()) { bMus.Visible = true; mt = new System.Windows.Forms.Timer(); mt.Interval = 500; mt.Tick += delegate { Bgm.Tick(); }; mt.Start(); }
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) { if (mt != null) mt.Stop(); Bgm.Stop(); base.OnFormClosed(e); }
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
         protected override void OnHandleCreated(EventArgs e)
@@ -205,10 +266,10 @@ namespace Back2U
                 float x = 178, y = 42;
                 g.DrawString("GOD ", f, w, x, y, sf); x += g.MeasureString("GOD ", f, 1000, sf).Width;
                 g.DrawString("OF ", f, r, x, y, sf); x += g.MeasureString("OF ", f, 1000, sf).Width;
-                g.DrawString("BACK2U", f, w, x, y, sf);
+                g.DrawString("GRIMERKA", f, w, x, y, sf);
             }
             using (Font f = new Font("Segoe UI", 15f, GraphicsUnit.Pixel)) using (SolidBrush b = new SolidBrush(DIM))
-                g.DrawString("сага о кенте, голосе и девяти серверах", f, b, 182, 102);
+                g.DrawString("сага о Пахане, кенте и девяти серверах", f, b, 182, 102);
             using (Font f = new Font("Segoe UI", 12f, GraphicsUnit.Pixel)) using (SolidBrush b = new SolidBrush(Color.FromArgb(110, 120, 140)))
                 g.DrawString("установщик · версия " + App.Version, f, b, 182, 126);
             using (SolidBrush rb = new SolidBrush(RED)) g.FillRectangle(rb, 0, 175, 660, 3);
@@ -231,7 +292,7 @@ namespace Back2U
             if (dir.Length < 4 || !Path.IsPathRooted(dir)) { MessageBox.Show(this, "Укажите полный путь к папке.", App.Name); return; }
             busy = true;
             foreach (Control c in new Control[] { path, bBrowse, cDesk, cStart, cRun, bInst, bCancel }) c.Enabled = false;
-            info.Visible = false; bar.Visible = true; status.Visible = true; status.Text = "Распаковка…";
+            info.Visible = false; bar.Visible = true; status.Visible = true; status.Text = "Качаем гримерку…";
             bool desk = cDesk.Checked, start = cStart.Checked, run = cRun.Checked;
             Thread t = new Thread(delegate ()
             {
@@ -262,8 +323,8 @@ namespace Back2U
             done = true; doneDir = dir;
             foreach (Control c in new Control[] { path, bBrowse, cDesk, cStart, cRun }) c.Enabled = false;
             bar.Visible = true; bar.Value = 100; status.Visible = true; info.Visible = false;
-            status.ForeColor = Color.FromArgb(125, 255, 125); status.Text = "Готово! Игра установлена.";
-            bInst.Text = "Играть"; bInst.Enabled = true; bCancel.Text = "Закрыть"; bCancel.Enabled = true;
+            status.ForeColor = Color.FromArgb(125, 255, 125); status.Text = "Готово! GOD OF GRIMERKA установлена — Пахан ждёт.";
+            bInst.Text = "ИГРАТЬ"; bInst.Enabled = true; bCancel.Text = "Закрыть"; bCancel.Enabled = true;
         }
 
         static void Play(string dir)

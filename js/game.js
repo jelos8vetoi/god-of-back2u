@@ -137,11 +137,21 @@ const K = {}, M = { x: W / 2, y: H / 2, l: false, r: false };
 let bt = 0, camYaw = -Math.PI / 2, camPit = .36, camD = 270, obs = [], fpsA = 60, qual = 2, qT = 0;
 const FIST = { dmg: 9, range: 58, arc: 1.7, wind: .06, dur: .17, cd: .04, kb: 90 };
 const lock = () => { try { if (document.pointerLockElement !== C && C.requestPointerLock) { const p = C.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } } catch (e) {} };
-function inputDir() { const ix = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0), iy = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), c = Math.cos(camYaw), s = Math.sin(camYaw); return [c * iy - s * ix, s * iy + c * ix]; }
+function inputDir() { const ix = (K[KM.right] ? 1 : 0) - (K[KM.left] ? 1 : 0), iy = (K[KM.up] ? 1 : 0) - (K[KM.down] ? 1 : 0), c = Math.cos(camYaw), s = Math.sin(camYaw); return [c * iy - s * ix, s * iy + c * ix]; }
 function pushOut(o, r) { for (const b of obs) { const dx = o.x - b.x, dy = o.y - b.y, m = b.r + r, d2 = dx * dx + dy * dy; if (d2 < m * m && d2 > .01) { const d = Math.sqrt(d2); o.x = b.x + dx / d * m; o.y = b.y + dy / d * m; } } }
 
 let OPT = { sens: 1, vol: 1, q: 'auto', fps: false }; try { Object.assign(OPT, JSON.parse(localStorage.getItem('goc_opts') || '{}')); } catch (e) {}
 { const qs = new URLSearchParams(location.search); if (['auto', 'lo', 'mid', 'hi'].includes(qs.get('q'))) OPT.q = qs.get('q'); if (qs.has('fps')) OPT.fps = qs.get('fps') === '1'; }
+const KDEF = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', dodge: 'Space', block: 'ShiftLeft', interact: 'KeyF', thr: 'KeyC', rune: 'KeyE', adlib: 'KeyQ', rage: 'KeyR', w1: 'Digit1', w2: 'Digit2', w3: 'Digit3', menu: 'Tab', full: 'F11', fps: 'F3', mute: 'KeyM' };
+const KLAB = { up: 'Вперёд', down: 'Назад', left: 'Влево', right: 'Вправо', dodge: 'Перекат', block: 'Блок / парирование', interact: 'Действие / добивание', thr: 'Бросок биты', rune: 'Руна оружия', adlib: 'Ад-либ кента', rage: 'Перегруз / ульта', w1: 'Бита', w2: 'Микрофон', w3: 'Сэмплер', menu: 'Прокачка', full: 'Полный экран', fps: 'Счётчик FPS', mute: 'Звук вкл/выкл' };
+const KM = Object.assign({}, KDEF, OPT.keys || {});
+let BIND = null, fsWant = new URLSearchParams(location.search).get('fs') === '1';
+function KN(a) {
+  const c = KM[a] || '', m = { Space: 'Пробел', ShiftLeft: 'Shift', ShiftRight: 'Shift (пр.)', ControlLeft: 'Ctrl', ControlRight: 'Ctrl (пр.)', AltLeft: 'Alt', AltRight: 'Alt (пр.)', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', CapsLock: 'Caps', Enter: 'Enter', Backspace: '⌫', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' };
+  return m[c] || c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num ');
+}
+function toggleFS() { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {} }
+document.addEventListener('pointerdown', () => { if (fsWant) { fsWant = false; toggleFS(); } }, true);
 let DYN = 1, upT = 0, fpsN = 60, shF = 0, VIG = null;
 const saveOpt = () => { try { localStorage.setItem('goc_opts', JSON.stringify(OPT)); } catch (e) {} };
 let tipQ = [], tipT = 0, waves = [], mdlTot = 0, mdlDone = 0, padPrev = [], padKeys = {}, stepT = 0;
@@ -340,7 +350,7 @@ function qReady(id) {
 function scan() {
   target = null; prompt = '';
   let best = 150;
-  for (const e of ens) if (e.fin && !e.dead) { const d = dist(e, P) - e.r; if (d < best) { best = d; target = { fin: e }; prompt = '[F]  ДОБИТЬ'; } }
+  for (const e of ens) if (e.fin && !e.dead) { const d = dist(e, P) - e.r; if (d < best) { best = d; target = { fin: e }; prompt = '[' + KN('interact') + ']  ДОБИТЬ'; } }
   if (fs) return;
   for (const r of LV.sides) {
     const s = r.side;
@@ -349,15 +359,15 @@ function scan() {
   for (const o of ents) {
     if (o.k === 'tgt' || o.k === 'brk') continue;
     const d = dist(o, P);
-    if (o.k === 'swall') { if (!o.dead && d < 170) prompt = 'Завал звучит пусто…  Разбей тяжёлым ударом [ПКМ] или броском биты [C]'; continue; }
+    if (o.k === 'swall') { if (!o.dead && d < 170) prompt = 'Завал звучит пусто…  Разбей тяжёлым ударом [ПКМ] или броском биты [' + KN('thr') + ']'; continue; }
     if (o.k === 'lore') { if (!S.done[o.id] && d < 44) { S.done[o.id] = 1; S.xp += 60; toast('📼  ' + LORE[S.ch][o.i], 9); sfx.pick(); save(); } }
     else if (o.k === 'portal') {
       if (d < 58) { if (exitOpen()) { nextChapter(); return; } if (!(o.w > T)) { o.w = T + 3; toast('Портал закрыт: сначала разберись с этим сервером', 2.5); } }
     } else if (d < 95) {
-      if (o.k === 'chest') { if (S.done[o.id] || (o.room.side.guard && !S.done[o.room.side.id])) continue; if (o.lock && !S.done[o.lock]) { prompt = '🔒  Сбей 3 мишени 🎯 на стене: бросок биты [C] или диски'; continue; } prompt = '[F]  Открыть сундук'; }
-      else if (o.k === 'stash') { if (S.done[o.id] || d > 70) continue; prompt = '[F]  ✨ Тайник'; }
-      else if (o.k === 'npc') prompt = '[F]  Поговорить: ' + NPCS[o.id].n;
-      else prompt = '[F]  Дядя Сева на связи — мастерская';
+      if (o.k === 'chest') { if (S.done[o.id] || (o.room.side.guard && !S.done[o.room.side.id])) continue; if (o.lock && !S.done[o.lock]) { prompt = '🔒  Сбей 3 мишени 🎯 на стене: бросок биты [' + KN('thr') + '] или диски'; continue; } prompt = '[' + KN('interact') + ']  Открыть сундук'; }
+      else if (o.k === 'stash') { if (S.done[o.id] || d > 70) continue; prompt = '[' + KN('interact') + ']  ✨ Тайник'; }
+      else if (o.k === 'npc') prompt = '[' + KN('interact') + ']  Поговорить: ' + NPCS[o.id].n;
+      else prompt = '[' + KN('interact') + ']  Дядя Сева на связи — мастерская';
       target = { o };
     }
   }
@@ -585,7 +595,7 @@ function dmgE(e, dmg, o) {
   if (o.w === 'bat' && e.stun > 0 && sk('b4')) dmg *= 1.5;
   e.hp -= dmg; e.fl = .1;
   e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .45 : .8) * (e.boss ? 2 : 1) + (o.sm || 0);
-  if (e.sm >= 1 && !e.fin && e.hp > 0) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [F]', '#ffe14a', 1); tip('fin', 'Враг оглушён: подойди и нажми F — добивание лечит. Если оглушено несколько, добивания пойдут серией.'); }
+  if (e.sm >= 1 && !e.fin && e.hp > 0) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [' + KN('interact') + ']', '#ffe14a', 1); tip('fin', 'Враг оглушён: подойди и нажми F — добивание лечит. Если оглушено несколько, добивания пойдут серией.'); }
   float(e.x + rnd(-10, 10), e.y - e.r - 6, Math.round(dmg), dmg > 60 ? '#ffd23b' : '#fff');
   burst(e.x, e.y, e.c, 3); { const ha = ang(P, e), hc = o.w ? WP[o.w].col : '#ffffff'; sparks(e.x, e.y, ha, o.heavy ? 14 : 7, o.heavy ? '#ffffff' : hc); fxGlow(e.x, e.y, hc, o.heavy ? 150 : 80, .16, e.r * 1.8 + (e.air || 0)); if (o.heavy) punch = Math.max(punch, 4); }
   if (P.rage <= 0 && !(P.swLock > 0)) P.swag = Math.min(100, P.swag + Math.min(dmg, 90) * .08 * (has('energy') ? 1.4 : 1) * (1 + .25 * S.st.swag) * (o.w === 'mic' && sk('m4') ? 2 : 1));
@@ -640,7 +650,7 @@ function hurtP(dmg, src, isProj) {
   return true;
 }
 const TIPS = ['Перекат [ПРОБЕЛ] даёт неуязвимость — катись СКВОЗЬ удар.', 'Блок [SHIFT], нажатый в последний момент, парирует и оглушает.', 'Красная зона на полу — уходи из неё.',
-  'Зелёные сферы лечат. Накрутчиков и хейтеров убивай первыми.', 'Не забывай про TAB: прослушивания ▶ и ленты ▣ тратятся на прокачку.', 'ПЕРЕГРУЗ [R] вдвое режет входящий урон и лечит от ударов.'];
+  'Зелёные сферы лечат. Накрутчиков и хейтеров убивай первыми.', 'Не забывай про TAB: прослушивания ▶ и ленты ▣ тратятся на прокачку.', 'ПЕРЕГРУЗ [' + KN('rage') + '] вдвое режет входящий урон и лечит от ударов.'];
 function die() { S.stat.deaths++; try { const sv = load(); if (sv) { sv.stat = S.stat; localStorage.setItem(KEY, JSON.stringify(sv)); } } catch (e) {} mode = 'dead'; $('deadTip').textContent = TIPS[Math.floor(rnd(0, TIPS.length))]; show('dead', true); sfx.boom(); }
 function retry() { show('dead', false); const sw = P.swag; S = load() || S; P.hp = maxHp(); P.swag = sw * .5; P.rage = 0; loadLevel(); mode = 'fight'; lock(); }
 
@@ -670,9 +680,9 @@ function doDodge() {
   if (P.dcd > 0 || P.dodge > 0) return;
   let [mx, my] = inputDir();
   if (!mx && !my) { mx = Math.cos(P.aim); my = Math.sin(P.aim); }
-  const l = Math.hypot(mx, my); P.dvx = mx / l * 700; P.dvy = my / l * 700;
-  { let rl = Math.atan2(my, mx) - P.aim; while (rl > Math.PI) rl -= TAU; while (rl < -Math.PI) rl += TAU; P.dk = Math.abs(rl) < .8 ? 'dF' : Math.abs(rl) > 2.35 ? 'dB' : rl > 0 ? 'dR' : 'dL'; }
-  P.dodge = .22; P.dcd = .8; P.inv = Math.max(P.inv, (T - (P.ldT || -9) < 1.2 ? .72 : 1) * (has('pods') ? .36 : .25)); P.ldT = T; P.atk = null; P.chg = 0; P.dn = (P.dn || 0) + 1; noise(.1, .08, 3000);
+  const l = Math.hypot(mx, my); P.dvx = mx / l * 460; P.dvy = my / l * 460;
+  { let rl = Math.atan2(my, mx) - P.aim; while (rl > Math.PI) rl -= TAU; while (rl < -Math.PI) rl += TAU; P.drl = rl; P.dk = Math.abs(rl) < .8 ? 'dF' : Math.abs(rl) > 2.35 ? 'dB' : rl > 0 ? 'dR' : 'dL'; }
+  P.dT = .38; P.dodge = P.dT; P.dcd = .9; P.inv = Math.max(P.inv, (T - (P.ldT || -9) < 1.2 ? .72 : 1) * (has('pods') ? .36 : .25)); P.ldT = T; P.atk = null; P.chg = 0; P.dn = (P.dn || 0) + 1; noise(.1, .08, 3000);
 }
 
 function updPlayer(dt) {
@@ -685,7 +695,7 @@ function updPlayer(dt) {
   if (document.pointerLockElement !== C) { const ex = M.x / W - .5; if (Math.abs(ex) > .2) camYaw += (ex - Math.sign(ex) * .2) * dt * 4; }
   if (!isFinite(camYaw)) camYaw = -Math.PI / 2; if (!isFinite(camPit)) camPit = .36;
   P.aim = camYaw;
-  P.block = !!(K.ShiftLeft || K.ShiftRight) && !P.atk && P.dodge <= 0 && P.spin <= 0;
+  P.block = !!(K[KM.block] || (KM.block === 'ShiftLeft' && K.ShiftRight)) && !P.atk && P.dodge <= 0 && P.spin <= 0;
   if (P.block) P.blockT += dt; else P.blockT = 0;
   let sp = 255 * (has('kicks') ? 1.12 : 1) * (P.chg > .15 ? .5 : 1) * (P.buff > 0 ? 1.3 : 1) * (P.rage > 0 ? 1.2 : 1);
   if (P.block) sp *= .4; if (P.atk) sp *= P.atk.heavy ? .25 : .55;
@@ -1008,7 +1018,7 @@ function init3d() {
     } catch (e) { PPC = null; }
   }
   _ray = new T3.Raycaster(); _pl = new T3.Plane(new T3.Vector3(0, 1, 0), 0); _hit = new T3.Vector3(); _nd = new T3.Vector2(); v3 = new T3.Vector3();
-  // Ванёк
+  // Пахан
   const r = 17; PM = new T3.Group(); PIN = new T3.Group(); PM.add(PIN);
   pBodyMat = new T3.MeshStandardMaterial({ color: '#1b1e27', roughness: .8 });
   PIN.add(mesh(new T3.CylinderGeometry(r * .75, r, r * 2, 16), pBodyMat, 0, r, 0), cyl(r * .93, r * .97, 6, '#d81e1e', 0, r * 1.25, 0),
@@ -1288,6 +1298,7 @@ const ANIM = { idle: ['Idle'], run: ['Running_A', 'Running'], atk: ['1H_Melee_At
   b1: ['2H_Melee_Attack_Slice'], b3: ['2H_Melee_Attack_Spin'], bh: ['2H_Melee_Attack_Chop'], bi: ['2H_Melee_Idle', 'Idle'], m1: ['1H_Melee_Attack_Slice_Horizontal'], m2: ['1H_Melee_Attack_Slice_Diagonal'], m3: ['1H_Melee_Attack_Stab'],
   mh: ['2H_Melee_Attack_Spin'], ms: ['2H_Melee_Attack_Spinning', '2H_Melee_Attack_Spin'], v1: ['Throw'], vh: ['Spellcast_Shoot'], p1: ['Unarmed_Melee_Attack_Punch_A'], p2: ['Unarmed_Melee_Attack_Punch_B'], kick: ['Unarmed_Melee_Attack_Kick'],
   dF: ['Dodge_Forward'], dB: ['Dodge_Backward', 'Dodge_Forward'], dL: ['Dodge_Left', 'Dodge_Forward'], dR: ['Dodge_Right', 'Dodge_Forward'], hitB: ['Hit_B', 'Hit_A'], jump: ['Jump_Full_Short'] };
+const ROLLA = new T3.Vector3(), ROLLO = new T3.Vector3();
 let HW = null, PTI = null, SHC = null, glows = [];
 const KK = { vanek: 1, kent: 1, mage: 1, barb: 1, knight: 1, skmage: 1, skmin: 1, skrog: 1, skwar: 1 };
 // склейка геометрий: items = [{ g, m }] (m — матрица или null), у всех одинаковый набор атрибутов
@@ -1516,24 +1527,24 @@ function chip(x, y, t, col) { X.font = '17px ' + FONT; const w = X.measureText(t
 function drawHud() {
   X.textBaseline = 'alphabetic'; X.textAlign = 'left'; const now = performance.now() / 1000;
   const mh = maxHp(), hv = clamp(P.hp / mh, 0, 1); hud.hp = hud.hp < hv ? hv : Math.max(hv, hud.hp - .005);
-  X.font = '16px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 6; X.fillStyle = '#fff'; X.fillText('ВАНЁК', 46, H - 96); X.fillStyle = '#ff5a3c'; X.fillText('back2u', 46 + X.measureText('ВАНЁК ').width, H - 96); X.shadowBlur = 0;
+  X.font = '16px ' + FONT; X.shadowColor = '#000'; X.shadowBlur = 6; X.fillStyle = '#fff'; X.fillText('ПАХАН', 46, H - 96); X.shadowBlur = 0;
   gbar(40, H - 86, 360, 22, hv, hud.hp, '#a30f1c', '#ff5a3c');
   X.font = '13px ' + FONT; X.fillStyle = '#fff'; X.fillText(Math.max(0, Math.ceil(P.hp)) + ' / ' + mh, 62, H - 69);
   const full = P.swag >= 100;
   gbar(32, H - 54, 270, 12, P.rage > 0 ? P.rage / 8 : P.swag / 100, 0, P.rage > 0 ? '#ff2a00' : '#ff8a00', full && Math.floor(now * 6) % 2 ? '#ffffff' : '#ffd23b');
-  X.font = '12px ' + FONT; X.fillStyle = full || P.rage > 0 ? '#ffd23b' : '#8d97aa'; X.fillText(P.rage > 0 ? 'ПЕРЕГРУЗ!  [R] — УЛЬТА' : full ? 'СВЭГ ПОЛОН — [R]' : 'СВЭГ', 322, H - 43);
+  X.font = '12px ' + FONT; X.fillStyle = full || P.rage > 0 ? '#ffd23b' : '#8d97aa'; X.fillText(P.rage > 0 ? 'ПЕРЕГРУЗ!  [' + KN('rage') + '] — УЛЬТА' : full ? 'СВЭГ ПОЛОН — [' + KN('rage') + ']' : 'СВЭГ', 322, H - 43);
   // оружие
   let i = 0;
   for (const w of ['bat', 'mic', 'vinyl']) {
     const x = 44 + i * 78, y = H - 172, own = S.wl[w] > 0, cur = S.weapon === w, c = WP[w].col;
     skew(x, y, 62, 58); X.fillStyle = cur ? 'rgba(46,12,12,.92)' : 'rgba(6,8,12,.8)'; X.fill(); X.strokeStyle = cur ? c : 'rgba(255,255,255,.25)'; X.lineWidth = cur ? 3 : 1.5; if (cur) { X.shadowColor = c; X.shadowBlur = 14; } X.stroke(); X.shadowBlur = 0;
     X.globalAlpha = own ? 1 : .25; X.font = '28px "Segoe UI Emoji"'; X.textAlign = 'center'; X.fillStyle = '#fff'; X.fillText(own ? (w === 'bat' && P.thr ? '👊' : WP[w].icon) : '🔒', x + 48, y + 38); X.globalAlpha = 1;
-    X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = cur ? '#fff' : '#8d97aa'; X.fillText(String(i + 1), x + 72, y + 14);
+    X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = cur ? '#fff' : '#8d97aa'; X.fillText(KN('w' + (i + 1)), x + 72, y + 14);
     if (own) for (let l = 0; l < 5; l++) { X.fillStyle = l < S.wl[w] ? '#ffd23b' : 'rgba(255,255,255,.18)'; X.fillRect(x + 10 + l * 9, y + 50, 7, 3); }
     const rid = { bat: 'b5', mic: 'm5', vinyl: 'v5' }[w];
     if (own && sk(rid)) {
       const k = 1 - clamp(P.rcd[w] / WP[w].rune.cd, 0, 1), rx = x + 24, ry = y + 4; X.beginPath(); X.arc(rx, ry, 12, 0, TAU); X.fillStyle = 'rgba(6,8,12,.95)'; X.fill();
-      radial(rx, ry, 11, k, k >= 1 ? c : 'rgba(255,255,255,.35)'); X.font = '11px ' + FONT; X.textAlign = 'center'; X.fillStyle = k >= 1 ? '#000' : '#fff'; X.fillText('E', rx, ry + 4);
+      radial(rx, ry, 11, k, k >= 1 ? c : 'rgba(255,255,255,.35)'); X.font = '11px ' + FONT; X.textAlign = 'center'; X.fillStyle = k >= 1 ? '#000' : '#fff'; X.fillText(KN('rune').slice(0, 2), rx, ry + 4);
     }
     i++;
   }
@@ -1542,9 +1553,9 @@ function drawHud() {
     X.beginPath(); X.arc(cx, cy, 30, 0, TAU); X.fillStyle = 'rgba(6,8,12,.88)'; X.fill(); radial(cx, cy, 28, k, k >= 1 ? 'rgba(92,208,255,.55)' : 'rgba(92,208,255,.2)');
     X.beginPath(); X.arc(cx, cy, 30, 0, TAU); X.strokeStyle = '#5cd0ff'; X.lineWidth = k >= 1 ? 3 : 1.5; X.stroke();
     X.font = '24px "Segoe UI Emoji"'; X.textAlign = 'center'; X.fillStyle = '#fff'; X.globalAlpha = k >= 1 ? 1 : .4; X.fillText('🗣️', cx, cy + 9); X.globalAlpha = 1;
-    X.font = '12px ' + FONT; X.fillStyle = '#5cd0ff'; X.fillText('Q · madk1d', cx, cy + 48);
+    X.font = '12px ' + FONT; X.fillStyle = '#5cd0ff'; X.fillText(KN('adlib') + ' · madk1d', cx, cy + 48);
   }
-  if (S.weapon === 'bat') { X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = P.thr ? '#ffd23b' : '#8d97aa'; X.fillText(P.thr ? '[C] — вернуть биту' : '[C] — бросить биту', 46, H - 184); }
+  if (S.weapon === 'bat') { X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = P.thr ? '#ffd23b' : '#8d97aa'; X.fillText(P.thr ? '[' + KN('thr') + '] — вернуть биту' : '[' + KN('thr') + '] — бросить биту', 46, H - 184); }
   chip(W - 30, 16, '▶ ' + S.xp, '#7dff7d'); chip(W - 30, 50, '▣ ' + S.tapes, '#ffd23b');
   X.textAlign = 'center';
   if (fs && fs.boss && !fs.boss.dead) {
@@ -1618,7 +1629,7 @@ function render() {
   for (const k in pools) pools[k].i = 0;
   for (const p of spinners) { const u = p.userData, a = u.a + now * u.sp; p.position.set(LV.w / 2 + Math.cos(a) * u.rr, u.h + Math.sin(now + u.a) * 10, LV.h / 2 + Math.sin(a) * u.rr * .6); p.rotation.set(now * .5 + u.a, now * .3, 0); }
 
-  // Ванёк
+  // Пахан
   const w = S.weapon, wd = WP[w], a = P.atk;
   PM.position.set(P.x, 0, P.y); PM.rotation.y = -P.aim;
   if (!PM.userData.mdl && MDL.vanek) {
@@ -1632,7 +1643,7 @@ function render() {
   if (pg) {
     const cb = a ? a.combo % 3 : 0;
     if (fn) play(pg, fn.seq[fn.i][0], true, fn.seq[fn.i][1] * 1.2, 'f' + fn.n + '_' + fn.i);
-    else if (P.dodge > 0) play(pg, P.dk || 'dF', true, .34, P.dn);
+    else if (P.dodge > 0) play(pg, 'dF', true, P.dT, P.dn);
     else if (P.hurtT > 0) play(pg, 'hitB', true, .35, 'h');
     else if (P.block) play(pg, 'block');
     else if (P.spin > 0) play(pg, 'ms', false, .45);
@@ -1642,8 +1653,15 @@ function render() {
     else play(pg, w === 'bat' && !P.thr && fs ? 'bi' : 'idle');
     pg.userData.mx.update(fdt);
     PIN.position.y = fn && fn.seq[fn.i][0] === 'bh' ? Math.sin(clamp(fn.t / fn.seq[fn.i][1], 0, 1) * Math.PI) * 24 : 0;
+    // кувырок: модель делает полный оборот через голову в сторону движения, вращаясь вокруг центра тела
+    if (P.dodge > 0) {
+      const kq = clamp(1 - P.dodge / (P.dT || .38), 0, 1), th = kq * kq * (3 - 2 * kq) * TAU, rl = P.drl || 0, hc = 30;
+      ROLLA.set(Math.sin(rl), 0, -Math.cos(rl)); PIN.quaternion.setFromAxisAngle(ROLLA, th);
+      ROLLO.set(0, hc, 0).applyQuaternion(PIN.quaternion); PIN.position.set(-ROLLO.x, hc - ROLLO.y + Math.sin(kq * Math.PI) * 5, -ROLLO.z);
+      PIN.scale.set(1, 1 - .12 * Math.sin(kq * Math.PI), 1);
+    } else { PIN.quaternion.set(0, 0, 0, 1); PIN.position.x = 0; PIN.position.z = 0; PIN.scale.set(1, 1, 1); }
   }
-  if (P.dodge > 0 && !pg) { PIN.rotation.z = -(1 - P.dodge / .22) * TAU; PIN.position.y = 14; PIN.scale.setScalar(.8); } else if (!pg) { PIN.rotation.z = 0; PIN.position.y = 0; PIN.scale.setScalar(1); }
+  if (P.dodge > 0 && !pg) { PIN.rotation.z = -(1 - P.dodge / (P.dT || .38)) * TAU; PIN.position.y = 14; PIN.scale.setScalar(.8); } else if (!pg) { PIN.rotation.z = 0; PIN.position.y = 0; PIN.scale.setScalar(1); }
   pBodyMat.emissive.set(P.rage > 0 ? '#ff4a1c' : '#000000');
   for (const k in WG) WG[k].visible = k === w && !(k === 'bat' && P.thr);
   if (P.thr) { const m = use('tb', () => { const q = new T3.Group(); q.add(box(18, 6, 6, '#2b5fd0', -22, 0, 0), box(40, 10, 10, '#d2a868', 6, 0, 0), box(4, 11, 11, '#ff5a2a', 24, 0, 0)); return q; }); m.position.set(P.thr.x, 30, P.thr.y); m.rotation.y = P.thr.rot; dRing(P.thr.x, P.thr.y, 20, '#ff5a2a', .7); }
@@ -1726,7 +1744,7 @@ function render() {
   { const dk = fs && !fs.done && fs.mut === 'dark', fg = SC.fog; fg.near += ((dk ? 90 : 450) - fg.near) * .08; fg.far += ((dk ? 560 : 2100) - fg.far) * .08; }
   for (const w of waves) { dRing(w.x, w.y, w.r, w.c, .95); dRing(w.x, w.y, w.r - 12, '#ffffff', .6); dRing(w.x, w.y, w.r + 12, '#ff2020', .7); }
   for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
-  if (P.dodge > 0) fxGlow(P.x, P.y, '#7fd4ff', 90, .28, 40);
+  if (P.dodge > 0) fxGlow(P.x, P.y, '#c9b8a0', 34, .1, 6);
   if (P.chg > .15) { const gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(P.chg >= 1 ? '#ffffff' : wd.col); gq.material.opacity = .5 + P.chg * .5; gq.scale.setScalar(70 + P.chg * 170 + Math.sin(now * 30) * 12); gq.position.set(P.x, 44, P.y); if (Math.random() < .6) { const an = rnd(0, TAU); pts.push({ x: P.x + Math.cos(an) * 110, y: P.y + Math.sin(an) * 110, vx: -Math.cos(an) * 420, vy: -Math.sin(an) * 420, l: .22, c: wd.col, s: 2.4, st: 1 }); } }
   if (a && a.t >= a.wind && a.w !== 'vinyl') { const dd = a.d || wd[a.heavy ? 'heavy' : 'light'], kq = clamp((a.t - a.wind) / (a.dur - a.wind + .001), 0, 1), sg = a.combo % 2 ? -1 : 1, ca = a.a + sg * (kq - .5) * dd.arc * .8, gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(wd.col); gq.material.opacity = 1 - kq; gq.scale.setScalar(a.heavy ? 150 : 90); gq.position.set(P.x + Math.cos(ca) * dd.range * .85, 36, P.y + Math.sin(ca) * dd.range * .85); }
   for (const h of hfx) { h.l -= fdt; if (h.l <= 0) continue; const gq = use('hf', () => glowS('#ffffff', 10)), q = h.l / h.ml; gq.material.color.set(h.c); gq.material.opacity = q; gq.scale.setScalar(h.s * (1.25 - q * .5)); gq.position.set(h.x, h.h, h.y); } hfx = hfx.filter(h => h.l > 0);
@@ -1754,7 +1772,7 @@ function render() {
     if (e.spawn > 0) continue; const q = proj(e.x, e.y, e.m.userData.top + e.r * 1.4);
     if (!e.boss && e.hp < e.maxhp) { X.fillStyle = '#000'; X.fillRect(q.x - 21, q.y - 1, 42, 6); X.fillStyle = '#f44'; X.fillRect(q.x - 20, q.y, 40 * clamp(e.hp / e.maxhp, 0, 1), 4); }
     if (e.sm > 0 && !e.fin && e.hp < e.maxhp) { X.fillStyle = '#000'; X.fillRect(q.x - 21, q.y + 6, 42, 4); X.fillStyle = '#ffe14a'; X.fillRect(q.x - 20, q.y + 7, 40 * clamp(e.sm, 0, 1), 2); }
-    if (e.fin) { X.font = 'bold 20px "Russo One","Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText('[F]', q.x, q.y - 22); X.fillStyle = '#ffe14a'; X.fillText('[F]', q.x, q.y - 22); }
+    if (e.fin) { X.font = 'bold 20px "Russo One","Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText('[' + KN('interact') + ']', q.x, q.y - 22); X.fillStyle = '#ffe14a'; X.fillText('[' + KN('interact') + ']', q.x, q.y - 22); }
     if (e.stun > 0) { X.font = '15px sans-serif'; X.fillStyle = '#ffe14a'; X.fillText('✦ ✦ ✦', q.x, q.y - 6); }
     if (e.boss && e.sayT > 0 && e.say) { X.globalAlpha = Math.min(1, e.sayT); X.font = 'bold 19px "Segoe UI",sans-serif'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText(e.say, q.x, q.y - 12); X.fillStyle = e.c; X.fillText(e.say, q.x, q.y - 12); X.globalAlpha = 1; }
   }
@@ -1807,7 +1825,7 @@ function closeUp() { show('up', false); save(); upShop = false; mode = 'fight'; 
 let upTab = 'bat';
 function buildUp() {
   $('uxp').textContent = S.xp; $('utp').textContent = S.tapes;
-  const tabs = [['bat', WP.bat.icon + ' БИТА'], ['mic', WP.mic.icon + ' МИКРОФОН'], ['vinyl', WP.vinyl.icon + ' СЭМПЛЕР'], ['me', '💪 ВАНЁК И КЕНТ'], ['trk', '💍 ЦАЦКИ ' + S.trk.eq.length + ' / 3']];
+  const tabs = [['bat', WP.bat.icon + ' БИТА'], ['mic', WP.mic.icon + ' МИКРОФОН'], ['vinyl', WP.vinyl.icon + ' СЭМПЛЕР'], ['me', '💪 ПАХАН И КЕНТ'], ['trk', '💍 ЦАЦКИ ' + S.trk.eq.length + ' / 3']];
   let h = '<div class="tabs">' + tabs.map(([id, t]) => `<button class="tab ${upTab === id ? 'on' : ''}" data-a="tab" data-id="${id}">${t}</button>`).join('') + '</div><div class="pane">';
   const card = (cls, bdg, title, desc, right) => `<div class="card ${cls}"><i class="bdg">${bdg}</i><div><b>${title}</b><span>${desc}</span></div>${right}</div>`;
   if (WP[upTab]) {
@@ -1853,29 +1871,31 @@ $('upCols').addEventListener('click', ev => {
 
 /* ================= ВВОД ================= */
 addEventListener('keydown', e => {
-  if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
+  const c = e.code;
+  if (BIND) return;
+  if (c === 'Tab' || c === 'Space' || c === KM.menu || c === KM.dodge || c === KM.full || c === KM.fps) e.preventDefault();
   if (e.repeat) return;
-  K[e.code] = true; audio();
-  if (e.code === 'KeyM') { muted = !muted; toast(muted ? 'Звук выключен' : 'Звук включён', 1.2); }
-  if (e.code === 'F3') { e.preventDefault(); OPT.fps = !OPT.fps; saveOpt(); }
-  if (mode === 'dlg') { if (e.code === 'Space' || e.code === 'Enter') advDlg(); else if (e.code === 'Escape') endDlg(); return; }
-  if (mode === 'up') { if (e.code === 'Tab' || e.code === 'Escape') closeUp(); return; }
-  if (mode === 'pause') { if (e.code === 'Escape') { show('pause', false); show('help', false); mode = 'fight'; } return; }
-  if (mode === 'pause' && e.code === 'Escape') return;
+  K[c] = true; audio();
+  if (c === KM.full) { toggleFS(); return; }
+  if (c === KM.mute) { muted = !muted; toast(muted ? 'Звук выключен' : 'Звук включён', 1.2); }
+  if (c === KM.fps) { OPT.fps = !OPT.fps; saveOpt(); }
+  if (mode === 'dlg') { if (c === 'Space' || c === 'Enter' || c === KM.dodge || c === KM.interact) advDlg(); else if (c === 'Escape') endDlg(); return; }
+  if (mode === 'up') { if (c === KM.menu || c === 'Escape') closeUp(); return; }
+  if (mode === 'pause') { if (c === 'Escape') { show('pause', false); show('help', false); show('binds', false); mode = 'fight'; } return; }
   if (mode !== 'fight') return;
   if (cine) { if (cine.t > .4) cine = null; return; }
-  switch (e.code) {
-    case 'Space': doDodge(); break;
-    case 'KeyE': doRune(); break;
-    case 'KeyF': doInteract(); break;
-    case 'KeyC': doThrow(); break;
-    case 'KeyQ': doQ(); break;
-    case 'KeyR': doRage(); break;
-    case 'Digit1': swW('bat'); break;
-    case 'Digit2': swW('mic'); break;
-    case 'Digit3': swW('vinyl'); break;
-    case 'Tab': openUp(false); break;
-    case 'Escape': mode = 'pause'; $('oD').value = S.diff; show('pause', true); break;
+  if (c === 'Escape') { mode = 'pause'; $('oD').value = S.diff; show('pause', true); return; }
+  switch (Object.keys(KM).find(k => KM[k] === c)) {
+    case 'dodge': doDodge(); break;
+    case 'rune': doRune(); break;
+    case 'interact': doInteract(); break;
+    case 'thr': doThrow(); break;
+    case 'adlib': doQ(); break;
+    case 'rage': doRage(); break;
+    case 'w1': swW('bat'); break;
+    case 'w2': swW('mic'); break;
+    case 'w3': swW('vinyl'); break;
+    case 'menu': openUp(false); break;
   }
 });
 addEventListener('keyup', e => { K[e.code] = false; });
@@ -1911,19 +1931,33 @@ $('bNG').addEventListener('click', () => { S.ng = (S.ng || 0) + 1; S.ch = 0; S.s
 $('menu').querySelector('.tag').insertAdjacentHTML('afterend', '<div id="load" style="position:absolute;top:176px;color:#ffd23b;font-size:13px;letter-spacing:2px"></div>');
 const HELP = [['Комбо', 'Три лёгких удара подряд — третий усиленный. Удар сразу после смены оружия сильнее на 35%.'], ['Заряд', 'Держи ПКМ: полный заряд бьёт в 2.3 раза сильнее, ломает щиты и подбрасывает.'], ['Перекат и парирование', 'Перекат сквозь удар в последний момент замедляет время и даёт крит. SHIFT в момент удара — парирование с оглушением.'],
   ['Реакции', 'Микрофон вешает шок, диски — питч. Бита по шоку: ВЗРЫВ НИЗОВ. Бита по питчу: РАСКОЛ. Микрофон по питчу: ЗАМЫКАНИЕ. Диск по шоку: ИСКРА.'], ['Добивания', 'Жёлтая полоска под здоровьем врага — оглушение. Заполнилась — жми F. Несколько оглушённых добиваются серией.'],
-  ['Бита', 'C — бросок и возврат. Пока бита летит, Ванёк дерётся кулаками. Броском сбиваются мишени 🎯 и ломаются завалы.'], ['СВЭГ', 'Полная шкала: R — ПЕРЕГРУЗ. Ещё раз R — УЛЬТА по комнате.'], ['Кент', 'Q — ад-либ. madk1d сам стреляет нотами и раз за главу поднимает после смертельного удара (кроме сложности «Андеграунд»).'],
+  ['Бита', 'C — бросок и возврат. Пока бита летит, Пахан дерётся кулаками. Броском сбиваются мишени 🎯 и ломаются завалы.'], ['СВЭГ', 'Полная шкала: R — ПЕРЕГРУЗ. Ещё раз R — УЛЬТА по комнате.'], ['Кент', 'Q — ад-либ. madk1d сам стреляет нотами и раз за главу поднимает после смертельного удара (кроме сложности «Андеграунд»).'],
   ['Стиль', 'Рейтинг D–SSS растёт от разнообразия и даёт до +36% опыта.'], ['Секреты', 'В каждой главе: тайная комната за завалом у портала и два тайника ✨ в углах боевых комнат.'], ['Геймпад', 'Левый стик — ход, правый — камера, X/Y — удары, A — перекат, B — действие, LB — блок, RB — руна, LT — ад-либ, RT — бросок, крестовина — оружие.']];
 $('stage').insertAdjacentHTML('beforeend', '<div id="help" class="ov" style="background:rgba(5,6,10,.96);z-index:9;padding:26px 60px;justify-content:flex-start"><h2 style="letter-spacing:6px;margin-bottom:14px">МЕХАНИКИ</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;overflow:auto;flex:1;width:100%">' + HELP.map(q => '<div style="background:#131722;border:1px solid #232938;border-left:4px solid #ff3b3b;padding:10px 14px"><b style="font-size:15px;color:#ffd23b">' + q[0] + '</b><div style="font-size:13px;color:#b9c2d4;line-height:1.45;margin-top:3px">' + q[1] + '</div></div>').join('') + '</div><button id="helpX" style="margin-top:14px">Закрыть</button></div>');
 $('helpX').addEventListener('click', () => show('help', false));
-$('pause').insertAdjacentHTML('beforeend', '<div style="margin-top:16px;display:grid;grid-template-columns:auto 220px;gap:10px 16px;align-items:center;font-size:14px;color:#b9c2d4"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто: держит 60 FPS</option><option value="mid">Средняя: тени без свечения</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><button id="pHelp">Механики</button>');
-$('menu').querySelector('.keys').insertAdjacentHTML('beforebegin', '<div class="row"><button id="mHelp" style="padding:8px 18px;font-size:13px">Механики и геймпад</button></div>');
+$('pause').insertAdjacentHTML('beforeend', '<div style="margin-top:16px;display:grid;grid-template-columns:auto 220px;gap:10px 16px;align-items:center;font-size:14px;color:#b9c2d4"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто: держит 60 FPS</option><option value="mid">Средняя: тени без свечения</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><div class="row"><button id="pHelp">Механики</button><button id="pBinds">Управление</button><button id="pFull">Полный экран</button></div>');
+$('menu').querySelector('.keys').insertAdjacentHTML('beforebegin', '<div class="row"><button id="mHelp" style="padding:8px 18px;font-size:13px">Механики и геймпад</button><button id="mBinds" style="padding:8px 18px;font-size:13px">Управление</button></div>');
 const applyQ = () => { qual = OPT.q === 'lo' ? 0 : OPT.q === 'mid' ? 1 : 2; DYN = 1; if (R3) { setPR(); SUN.castShadow = qual > 0; } };
 $('oSens').value = OPT.sens; $('oVol').value = OPT.vol; $('oQ').value = OPT.q; applyQ();
 $('oSens').addEventListener('input', e => { OPT.sens = +e.target.value; saveOpt(); });
 $('oVol').addEventListener('input', e => { OPT.vol = +e.target.value; if (MG) MG.gain.value = .5 * OPT.vol; saveOpt(); });
 $('oQ').addEventListener('change', e => { OPT.q = e.target.value; applyQ(); saveOpt(); });
 $('oD').addEventListener('change', e => { if (S) { S.diff = +e.target.value; save(); } });
-$('pHelp').addEventListener('click', () => show('help', true)); $('mHelp').addEventListener('click', () => show('help', true));
+$('pHelp').addEventListener('click', () => show('help', true));
+$('stage').insertAdjacentHTML('beforeend', '<div id="binds" class="ov" style="background:rgba(5,6,10,.97);z-index:10;padding:22px 60px;justify-content:flex-start"><h2 style="letter-spacing:6px;margin-bottom:4px">УПРАВЛЕНИЕ</h2><p style="color:#9fb0c8;margin-bottom:12px;font-size:13px">Нажми на действие, потом на новую клавишу. Esc — отмена. Удары — левая и правая кнопки мыши, пауза — Esc.</p><div id="bindList" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;width:100%;overflow:auto;flex:1"></div><div class="row" style="margin-top:12px"><button id="bindReset">По умолчанию</button><button id="bindDone">Готово</button></div></div>');
+function buildBinds() {
+  $('bindList').innerHTML = Object.keys(KDEF).map(a => '<div style="display:flex;justify-content:space-between;align-items:center;background:#131722;border:1px solid #232938;padding:5px 6px 5px 14px"><span style="font-size:14px;color:#d5dcea">' + KLAB[a] + '</span><button data-k="' + a + '" style="margin:0;min-width:130px;padding:7px 12px;font-size:13px;letter-spacing:1px' + (BIND === a ? ';background:#ff3b3b;border-color:#ff3b3b' : '') + '">' + (BIND === a ? 'жми клавишу…' : KN(a)) + '</button></div>').join('');
+}
+$('bindList').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (!b) return; BIND = b.dataset.k; buildBinds(); });
+addEventListener('keydown', e => {
+  if (!BIND) return; e.preventDefault(); e.stopImmediatePropagation();
+  if (e.code !== 'Escape') { const old = KM[BIND], other = Object.keys(KM).find(a => a !== BIND && KM[a] === e.code); if (other) KM[other] = old; KM[BIND] = e.code; OPT.keys = Object.assign({}, KM); saveOpt(); for (const k in K) K[k] = false; }
+  BIND = null; buildBinds();
+}, true);
+$('bindReset').addEventListener('click', () => { Object.assign(KM, KDEF); OPT.keys = {}; saveOpt(); BIND = null; buildBinds(); });
+$('bindDone').addEventListener('click', () => { BIND = null; show('binds', false); });
+$('pBinds').addEventListener('click', () => { buildBinds(); show('binds', true); });
+$('pFull').addEventListener('click', toggleFS); $('mHelp').addEventListener('click', () => show('help', true)); $('mBinds').addEventListener('click', () => { buildBinds(); show('binds', true); });
 function autoBuy(shop) {
   for (let n = 0, ok = true; ok && n < 80; n++) {
     ok = false;
@@ -1946,13 +1980,13 @@ function frame(ts) {
 function pad(dt) {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(q => q && q.connected) : null; if (!gp) return;
   const ax = gp.axes, bt0 = gp.buttons.map(b => b.pressed), dn = i => bt0[i] && !padPrev[i], dz = v => Math.abs(v) > .22 ? v : 0, key = (c, on) => { if (on) { K[c] = true; padKeys[c] = 1; } else if (padKeys[c]) { K[c] = false; padKeys[c] = 0; } };
-  key('KeyA', dz(ax[0]) < 0); key('KeyD', dz(ax[0]) > 0); key('KeyW', dz(ax[1]) < 0); key('KeyS', dz(ax[1]) > 0); key('ShiftLeft', bt0[4]);
+  key(KM.left, dz(ax[0]) < 0); key(KM.right, dz(ax[0]) > 0); key(KM.up, dz(ax[1]) < 0); key(KM.down, dz(ax[1]) > 0); key(KM.block, bt0[4]);
   camYaw += dz(ax[2] || 0) * dt * 3.2 * OPT.sens; camPit = clamp(camPit + dz(ax[3] || 0) * dt * 1.4 * OPT.sens, .1, .85);
   if (bt0.some(Boolean) || dz(ax[0]) || dz(ax[1])) audio();
   const press = c => dispatchEvent(new KeyboardEvent('keydown', { code: c }));
   if (mode === 'fight') { M.l = bt0[2] || (padKeys.l ? false : M.l); padKeys.l = bt0[2] ? 1 : 0; if (bt0[3]) { M.r = true; padKeys.r = 1; } else if (padKeys.r) { M.r = false; padKeys.r = 0; } }
-  if (dn(0)) press('Space'); if (dn(1)) press('KeyF'); if (dn(5)) press('KeyE'); if (dn(6)) press('KeyQ'); if (dn(7)) press('KeyC'); if (dn(10) || dn(11)) press('KeyR');
-  if (dn(14)) press('Digit1'); if (dn(12)) press('Digit2'); if (dn(15)) press('Digit3'); if (dn(8)) press('Tab'); if (dn(9)) press('Escape');
+  if (dn(0)) press(KM.dodge); if (dn(1)) press(KM.interact); if (dn(5)) press(KM.rune); if (dn(6)) press(KM.adlib); if (dn(7)) press(KM.thr); if (dn(10) || dn(11)) press(KM.rage);
+  if (dn(14)) press(KM.w1); if (dn(12)) press(KM.w2); if (dn(15)) press(KM.w3); if (dn(8)) press(KM.menu); if (dn(9)) press('Escape');
   padPrev = bt0;
 }
 function logic(raw) {
@@ -1994,7 +2028,7 @@ window.GOC = {
   full: () => { P.swag = 100; }, clearFx: () => { banners = []; txt = []; },
   sc: () => SC, r3: () => R3, mdl: () => MDL, ms: r => mergeSkinned(r),
   perf: n => { const t = []; for (let i = 0; i < n; i++) { logic(1 / 60); const a = performance.now(); render(); t.push(performance.now() - a); } t.sort((a, b) => a - b); const r = R3.info.render, m = R3.info.memory; return { avg: +(t.reduce((a, b) => a + b, 0) / n).toFixed(2), p95: +t[Math.floor(n * .95)].toFixed(2), calls: r.calls, tris: r.triangles, geo: m.geometries, tex: m.textures, objs: (() => { let c = 0; SC.traverse(() => c++); return c; })(), load: window.__loadMs, bake: window.__bake }; },
-  dbg: () => ({ camYaw, camPit, camD, bt, slowmo, hitstop, aim: P.aim, dodge: P.dodge, dvx: P.dvx, chg: P.chg, inv: P.inv, sw: P.swag, fsr: fs && [fs.room.x, fs.room.w, fs.room.cx], T, obsBad: obs.filter(b => !(b.r === b.r) || !(b.x === b.x)).length }),
+  dbg: () => ({ cine: cine && { t: cine.t, k: cine.k || cine.type || 1 }, dcd: P.dcd, mode, camYaw, camPit, camD, bt, slowmo, hitstop, aim: P.aim, dodge: P.dodge, dvx: P.dvx, chg: P.chg, inv: P.inv, sw: P.swag, fsr: fs && [fs.room.x, fs.room.w, fs.room.cx], T, obsBad: obs.filter(b => !(b.r === b.r) || !(b.x === b.x)).length }),
   lv: () => LV, ents: () => ents, interact: () => doInteract(),
   state: () => ({ mode, ch: S && S.ch, step: S && S.step, hp: P && P.hp, ens: ens.length, xp: S && S.xp, fs: !!fs, prompt, q: S && S.q, done: S && S.done, x: P && P.x, y: P && P.y }),
 };

@@ -1,4 +1,4 @@
-// Лаунчер «GOD OF BACK2U.exe»: своё окно в стиле игры — арт, «ИГРАТЬ», настройки графики, что нового.
+// Лаунчер «GOD OF GRIMERKA.exe»: своё окно в стиле игры — арт, «ИГРАТЬ», настройки графики, что нового.
 // Игру открывает в отдельном окне браузера (режим приложения, без адресной строки) и передаёт ей настройки.
 // Ключи: /play — сразу запустить игру без окна, /uninstall — удаление, /shot=файл.png — снимок окна (для проверки).
 using System;
@@ -12,7 +12,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace Back2U
+namespace Grimerka
 {
     static class Launcher
     {
@@ -65,7 +65,7 @@ namespace Back2U
             string html = Path.Combine(Path.Combine(Dir, "game"), "index.html");
             if (!File.Exists(html))
             {
-                MessageBox.Show("Файлы игры не найдены. Переустановите GOD OF BACK2U.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Файлы игры не найдены. Переустановите GOD OF GRIMERKA.", App.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
             string url = new Uri(html).AbsoluteUri + "?q=" + s.Q + "&fps=" + (s.Fps ? "1" : "0");
@@ -98,7 +98,7 @@ namespace Back2U
             { "lo", "Без теней и свечения, пониженное разрешение. Для слабых ноутбуков." },
             { "mid", "Тени есть, свечения нет. Хороший баланс для встроенной графики." },
             { "hi", "Тени, свечение, сглаживание — максимум красоты." } };
-        const string NEWS = "НОВОЕ В 1.1   ●   свой лаунчер   ●   режим «Авто» держит 60 FPS   ●   счётчик FPS на F3   ●   тени дешевле, рендер быстрее   ●   игра весит 9.5 МБ вместо 21   ●   9 глав, 9 боссов, 15 NPC, секреты, NG+   ●   ";
+        const string NEWS = "НОВОЕ В 1.2   ●   теперь это GOD OF GRIMERKA   ●   герой — Пахан   ●   настоящие перекаты на пробел   ●   полный экран на F11   ●   переназначение клавиш в настройках   ●   9 глав, 9 боссов, 15 NPC, секреты, NG+   ●   ";
 
         float S = 1f; Image art, icon; FontFamily ru; Settings set; Timer tick; float t, newsX;
         public string Hover; Dictionary<string, RectangleF> hits = new Dictionary<string, RectangleF>();
@@ -194,7 +194,7 @@ namespace Back2U
             // верхняя полоса
             using (LinearGradientBrush lg = new LinearGradientBrush(new RectangleF(0, 0, LW, 40), Color.FromArgb(200, 4, 4, 8), Color.FromArgb(0, 4, 4, 8), 90f)) g.FillRectangle(lg, 0, 0, LW, 40);
             g.DrawImage(icon, 16, 9, 20, 20);
-            using (Font f = new Font("Segoe UI Semibold", 12f, GraphicsUnit.Pixel)) Txt(g, "GOD OF BACK2U", f, DIM, 44, 12);
+            using (Font f = new Font("Segoe UI Semibold", 12f, GraphicsUnit.Pixel)) Txt(g, "GOD OF GRIMERKA", f, DIM, 44, 12);
             TopBtn(g, "min", new RectangleF(LW - 92, 0, 46, 36), false);
             TopBtn(g, "close", new RectangleF(LW - 46, 0, 46, 36), true);
 
@@ -206,12 +206,12 @@ namespace Back2U
             }
             using (GraphicsPath p = new GraphicsPath())
             {
-                p.AddString("BACK2U", ru, 0, 104f, new PointF(48, 136), StringFormat.GenericTypographic);
+                p.AddString("GRIMERKA", ru, 0, 92f, new PointF(48, 142), StringFormat.GenericTypographic);
                 float pulse = 0.5f + 0.5f * (float)Math.Sin(t * 1.6);
                 for (int i = 6; i >= 1; i--) using (Pen pen = new Pen(Color.FromArgb((int)((10 + 8 * pulse) * (7 - i) / 2), 255, 40, 30), i * 5f)) { pen.LineJoin = LineJoin.Round; g.DrawPath(pen, p); }
                 using (LinearGradientBrush lg = new LinearGradientBrush(new RectangleF(0, 150, 10, 90), Color.White, Color.FromArgb(255, 205, 195), 90f)) g.FillPath(lg, p);
             }
-            using (Font f = new Font("Segoe UI", 16f, GraphicsUnit.Pixel)) Txt(g, "сага о кенте, голосе и девяти серверах", f, DIM, 58, 256);
+            using (Font f = new Font("Segoe UI", 16f, GraphicsUnit.Pixel)) Txt(g, "сага о Пахане, кенте и девяти серверах", f, DIM, 58, 256);
 
             // ИГРАТЬ
             RectangleF pr = new RectangleF(56, 300, 300, 72); hits["play"] = pr;
@@ -327,7 +327,7 @@ namespace Back2U
             else if (h.StartsWith("q:")) { set.Q = QUAL[int.Parse(h.Substring(2))][0]; set.Save(); }
             else if (h.StartsWith("full:")) { set.Full = h == "full:0"; set.Save(); }
             else if (h.StartsWith("fps:")) { set.Fps = h == "fps:0"; set.Save(); }
-            else if (h == "gh") Open("https://github.com/jelos8vetoi/god-of-back2u");
+            else if (h == "gh") Open("https://github.com/jelos8vetoi/god-of-grimerka");
             else if (h == "folder") Open(Game.Dir);
             else if (h == "uninst") { if (Uninstall.Run(new string[] { "/uninstall" }) == 0 && !File.Exists(Path.Combine(Game.Dir, App.Marker))) Close(); }
             Invalidate();
