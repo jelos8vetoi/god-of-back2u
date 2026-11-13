@@ -36,6 +36,12 @@ button:disabled{opacity:.35;cursor:default}
 #dtext{font-size:21px;line-height:1.45;min-height:62px}
 #dtext.msg{font-family:Consolas,monospace;color:#bfeaff}
 #dtext.nar{font-style:italic;color:#c3ccdb}
+#dialogSkip{display:inline-flex;align-items:center;gap:7px;margin-left:18px;color:#c3ccdb;vertical-align:middle}
+#dialogSkip svg{width:25px;height:25px;transform:rotate(-90deg)}
+#dialogSkipFill{stroke-dasharray:100;stroke-dashoffset:100}
+#settings{background:rgba(5,7,12,.96);z-index:7}
+#settingsGrid{display:grid;grid-template-columns:230px 300px;align-items:center;gap:15px 24px;margin:24px 0;color:#dce3ef;font-size:17px}
+#settingsGrid select{padding:8px;background:#1a1d27;color:#fff;border:1px solid #495366}
 #dhint{position:absolute;right:16px;bottom:8px;font-size:11px;color:#667;letter-spacing:2px}
 #title{background:rgba(0,0,0,.82);pointer-events:none}
 #title .num{letter-spacing:10px;color:#ff3b3b;font-weight:700}
@@ -79,16 +85,35 @@ button:disabled{opacity:.35;cursor:default}
 </head>
 <body>
 <div id="wrap"><div id="stage">
+  <div id="tomskGuide" class="ov" role="dialog" aria-modal="true" aria-labelledby="guideTitle" style="z-index:12;background:rgba(3,5,10,.78);backdrop-filter:blur(6px)">
+    <div style="width:740px;padding:42px 48px;background:#10141f;border:1px solid #495366;border-top:4px solid #ffd23b;box-shadow:0 18px 90px #000">
+      <p id="guideCount" style="color:#ffd23b;letter-spacing:3px;font-size:16px"></p>
+      <h2 id="guideTitle" style="font-size:52px;line-height:1.12;margin:12px 0 20px"></h2>
+      <kbd id="guideKey" style="color:#ffd23b;background:#212633;border:1px solid #626b7c;padding:5px 12px;font:700 21px Segoe UI,sans-serif"></kbd>
+      <p id="guideBody" style="color:#dce3ef;font-size:23px;line-height:1.5;margin:20px 0 26px"></p>
+      <button id="guideGo" style="margin:0;background:#ffd23b;color:#10141f;border-color:#ffd23b;font-size:18px">Попробовать</button>
+      <button id="guideSkip" hidden>Пропустить обучение</button>
+    </div>
+  </div>
+  <div id="devPanel" class="ov" role="dialog" aria-labelledby="devTitle" style="z-index:11;background:rgba(5,7,12,.95)">
+    <h2 id="devTitle">ПАНЕЛЬ РАЗРАБОТЧИКА</h2>
+    <p class="small" style="margin:12px 0">Тестовый бой не записывается в сохранение кампании</p>
+    <div class="row"><button id="devBoss">Томск · Курьер</button><button id="devGod">Бессмертие: выкл.</button><button id="devHeal">Восстановить HP</button></div>
+    <div class="row"><button id="devPhase">Следующая фаза</button><button id="devWeapons">Выдать оружие</button></div>
+    <label style="margin:16px">Трек Курьера <input id="devTrack" type="file" accept="audio/*,.mp3,.ogg,.wav,.m4a"></label>
+    <p id="devStatus" role="status" style="min-height:24px;color:#ffd23b"></p>
+    <div class="row"><button id="devExit">В главное меню</button><button id="devBack">Назад</button></div>
+  </div>
   <div id="boot" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#05060a;z-index:20;color:#ff3b3b;font:700 34px Arial;letter-spacing:8px">GOD OF GRIMERKA<span style="font-size:14px;color:#9fb0c8;margin-top:14px;letter-spacing:4px">ЗАГРУЗКА…</span></div>
   <canvas id="gl" width="1280" height="720"></canvas>
   <canvas id="c" width="1280" height="720"></canvas>
   <div id="toast"></div>
-  <div id="dlg"><div id="dname"></div><div id="dtext"></div><div id="dhint">ПРОБЕЛ / КЛИК — ДАЛЕЕ · ESC — ПРОПУСТИТЬ СЦЕНУ</div></div>
+  <div id="dlg"><div id="dname"></div><div id="dtext"></div><div id="dhint">ПРОБЕЛ / КЛИК — ДАЛЕЕ<span id="dialogSkip"><svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="10" fill="none" stroke="#414858" stroke-width="3"/><circle id="dialogSkipFill" cx="14" cy="14" r="10" pathLength="100" fill="none" stroke="#ffd23b" stroke-width="3" stroke-linecap="round"/></svg>УДЕРЖИВАЙ ПРОБЕЛ — ПРОПУСТИТЬ</span></div></div>
 
   <div id="menu" class="ov on">
     <h1>GOD <span>OF</span> GRIMERKA</h1>
     <div class="tag">сага о Пахане, кенте и девяти серверах</div>
-    <div class="row"><button id="bCont">Продолжить</button></div>
+    <div class="row"><button id="bCont">Продолжить</button><button id="bSettings">Настройки</button></div>
     <div class="row">
       <button data-d="0">Новая игра · Изи</button>
       <button data-d="1">Новая игра · Норм</button>
@@ -112,8 +137,9 @@ button:disabled{opacity:.35;cursor:default}
   </div>
 
   <div id="pause" class="ov"><h2 style="letter-spacing:8px;margin-bottom:18px">ПАУЗА</h2>
-    <button id="pRes">Продолжить</button><button id="pUp">Прокачка</button><button id="pMenu">В главное меню</button></div>
+    <button id="pRes">Продолжить</button><button id="pUp">Прокачка</button><button id="pSettings">Настройки</button><button id="pMenu">В главное меню</button></div>
 
+  <div id="settings" class="ov" role="dialog" aria-labelledby="settingsTitle"><h2 id="settingsTitle">НАСТРОЙКИ</h2></div>
   <div id="dead" class="ov"><h2>ТРЕК УДАЛЁН</h2><p style="color:#9fb0c8;margin-bottom:20px" id="deadTip"></p><button id="bRetry">Перезалить</button></div>
 
   <div id="choice" class="ov"><h2>ЯДРО ОТКРЫТО</h2>
@@ -122,6 +148,31 @@ button:disabled{opacity:.35;cursor:default}
 
   <div id="end" class="ov"><h2 id="endT"></h2><p class="tag" id="endS"></p><button id="bEnd">В меню</button></div>
 </div></div>
+<script>
+(() => {
+  const boot = document.getElementById('boot');
+  const status = boot.querySelector('span');
+  let reported = false;
+  const showError = message => {
+    if (boot.style.display === 'none') return;
+    reported = true;
+    status.textContent = message;
+    status.style.cssText = 'font: 16px Segoe UI, sans-serif; letter-spacing: normal; margin-top: 14px; max-width: 75%; text-align: center; color: #e8ecf4';
+  };
+  window.addEventListener('error', event => {
+    if (event.target instanceof HTMLScriptElement) {
+      showError('Не загрузился файл ' + new URL(event.target.src).pathname.split('/').pop() + '. Открой игру через localhost из полной папки проекта.');
+    } else if (event.error) {
+      showError('Ошибка запуска: ' + event.error.message);
+    }
+  }, true);
+  setTimeout(() => {
+    if (!window.GOC && !reported) {
+      showError('Скрипты игры не запустились. Открой игру через localhost из полной папки проекта.');
+    }
+  }, 12000);
+})();
+</script>
 <script src="js/three.min.js"></script>
 <script src="js/GLTFLoader.js"></script>
 <script src="js/SkeletonUtils.js"></script>

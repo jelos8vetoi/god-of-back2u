@@ -10,22 +10,47 @@ const ang = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
 const adiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return Math.abs(d); };
 const show = (id, on) => $(id).classList.toggle('on', !!on);
 
-function fit() { $('stage').style.transform = `scale(${Math.min(innerWidth / W, innerHeight / H)})`; }
+function screenScale() { return Math.min(innerWidth / W, innerHeight / H); }
+function fit() {
+  $('stage').style.transform = `scale(${screenScale()})`;
+  const ratio = Math.min(2, Math.max(1, screenScale() * (window.devicePixelRatio || 1)));
+  C.width = Math.round(W * ratio);
+  C.height = Math.round(H * ratio);
+}
 addEventListener('resize', fit); fit();
 
 /* ================= ЗВУК ================= */
 let AC = null, MG = null, NB = null, muted = false;
 function audio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
-  try { AC = new (window.AudioContext || window.webkitAudioContext)(); MG = AC.createGain(); MG.gain.value = .5 * OPT.vol; MG.connect(AC.destination); } catch (e) { AC = null; }
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); MG = AC.createGain(); MG.gain.value = .5 * OPT.vol; MG.connect(AC.destination); musicBus = AC.createGain(); musicDry = AC.createGain(); musicBus.connect(musicDry).connect(MG); if (mode === 'guide') guideMusic(true); } catch (e) { AC = null; }
 }
-function tone(f, d, type, v, f2, when) {
+let musicBus, musicDry, musicWet;
+function guideMusic(open) {
+  if (!AC) return;
+  if (!musicWet) {
+    const reverb = AC.createConvolver();
+    const length = Math.ceil(AC.sampleRate * 2.2);
+    const impulse = AC.createBuffer(2, length, AC.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const samples = impulse.getChannelData(ch);
+      for (let i = 0; i < length; i++) samples[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3;
+    }
+    reverb.buffer = impulse;
+    musicWet = AC.createGain();
+    musicWet.gain.value = 0;
+    musicBus.connect(reverb).connect(musicWet).connect(MG);
+  }
+  musicDry.gain.setTargetAtTime(open ? .2 : 1, AC.currentTime, .12);
+  musicWet.gain.setTargetAtTime(open ? .75 : 0, AC.currentTime, .12);
+}
+function tone(f, d, type, v, f2, when, output = when == null ? MG : musicBus) {
   if (!AC || muted) return;
   const t = AC.currentTime + (when || 0), o = AC.createOscillator(), g = AC.createGain();
   o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
   if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(1, f2), t + d);
   g.gain.setValueAtTime(v || .2, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
-  o.connect(g); g.connect(MG); o.start(t); o.stop(t + d + .02);
+  o.connect(g); g.connect(output); o.start(t); o.stop(t + d + .02);
 }
 function noise(d, v, hp, when) {
   if (!AC || muted) return;
@@ -33,7 +58,7 @@ function noise(d, v, hp, when) {
   const t = AC.currentTime + (when || 0), s = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter();
   s.buffer = NB; f.type = 'highpass'; f.frequency.value = hp || 1000;
   g.gain.setValueAtTime(v || .2, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
-  s.connect(f); f.connect(g); g.connect(MG); s.start(t); s.stop(t + d + .02);
+  s.connect(f); f.connect(g); g.connect(when == null ? MG : musicBus); s.start(t); s.stop(t + d + .02);
 }
 const sfx = {
   swing: () => noise(.09, .12, 2500),
@@ -44,17 +69,16 @@ const sfx = {
   parry: () => { tone(1400, .15, 'square', .2, 2200); tone(700, .2, 'triangle', .2); },
   block: () => noise(.07, .18, 1500),
   ui: () => tone(660, .06, 'square', .08),
-  buy: () => { tone(520, .08, 'square', .12); tone(780, .12, 'square', .12, 0, .08); },
+  buy: () => { tone(520, .08, 'square', .12); tone(780, .12, 'square', .12, 0, .08, MG); },
   adlib: () => { tone(440, .18, 'sawtooth', .22, 660); tone(880, .12, 'square', .1, 0, .1); },
   rage: () => { tone(60, .9, 'sawtooth', .4, 240); noise(.5, .2, 500); },
   pick: () => tone(880, .1, 'sine', .15, 1320),
-  type: () => tone(rnd(500, 620), .02, 'square', .025),
 };
 const midi = n => 440 * Math.pow(2, (n - 69) / 12);
 /* ---------- музыка: свой стиль у каждой локации ---------- */
 const SC_MIN = [0, 2, 3, 5, 7, 8, 10], SC_PHR = [0, 1, 3, 5, 7, 8, 10], SC_DOR = [0, 2, 3, 5, 7, 9, 10], SC_HM = [0, 2, 3, 5, 7, 8, 11];
 const MUS = [
-  { n: 'клауд-рэп', bpm: 132, root: 45, sc: SC_MIN, prog: [0, 5, 3, 4], lead: 'bell', k: [0, 6, 10], s: [8], hat: 2, dens: .45, bass: [0, 6, 10] },
+  { n: 'Минус тридцать четыре', bpm: 94, root: 38, sc: SC_MIN, prog: [0, 5, 2, 6], lead: 'bell', k: [0, 7, 11], s: [8], hat: 4, bass: [0, 7, 11], slide: 1, dark: 1 },
   { n: 'бум-бэп из подвала', bpm: 88, root: 43, sc: SC_DOR, prog: [0, 3, 0, 4], lead: 'ep', k: [0, 7, 10], s: [4, 12], hat: 2, swing: .12, dens: .6, bass: [0, 7, 10], crackle: 1 },
   { n: 'клубный гиперпоп', bpm: 150, root: 48, sc: SC_MIN, prog: [0, 5, 2, 6], lead: 'sq', k: [0, 4, 8, 11, 14], s: [4, 12], hat: 1, dens: .8, bass: [0, 8, 11], arp: 1 },
   { n: 'витч-хаус', bpm: 108, root: 38, sc: SC_PHR, prog: [0, 1, 0, 5], lead: 'saw', k: [0, 10], s: [8], hat: 4, dens: .3, bass: [0, 10], dark: 1 },
@@ -65,7 +89,14 @@ const MUS = [
   { n: 'драм-н-бейс', bpm: 172, root: 39, sc: SC_PHR, prog: [0, 1, 5, 4], lead: 'sq', k: [0, 10], s: [4, 12], hat: 1, dens: .55, bass: [0, 10, 13], dark: 1, arp: 1 },
 ];
 let mStep = 0, mNext = 0, mCh = -1, mMel = [], FX = null;
+const TOMSK_MELODY = {
+  0: 4, 6: 6, 10: 9, 14: 6,
+  16: 2, 22: 4, 28: 2,
+  32: 2, 38: 5, 42: 4, 46: 2,
+  48: 3, 54: 1, 60: 3
+};
 function mkMel(ch) {
+  if (ch === 0) return Array.from({ length: 64 }, (_, i) => TOMSK_MELODY[i] ?? null);
   let sd = 1234 + ch * 977; const R = () => (sd = (sd * 16807) % 2147483647) / 2147483647, m = MUS[ch], out = []; let deg = 4;
   for (let i = 0; i < 64; i++) {
     if (i >= 32 && R() < .78) { out.push(out[i - 32]); continue; }
@@ -77,7 +108,7 @@ function mkMel(ch) {
   return out;
 }
 function fxOut() {
-  if (!FX) { const d = AC.createDelay(1), fb = AC.createGain(), w = AC.createGain(); d.delayTime.value = .28; fb.gain.value = .35; w.gain.value = .5; d.connect(fb); fb.connect(d); d.connect(w); w.connect(MG); FX = d; }
+  if (!FX) { const d = AC.createDelay(1), fb = AC.createGain(), w = AC.createGain(); d.delayTime.value = .28; fb.gain.value = .35; w.gain.value = .5; d.connect(fb); fb.connect(d); d.connect(w); w.connect(musicBus); FX = d; }
   return FX;
 }
 function voice(f, d, type, v, when, o) {
@@ -87,7 +118,7 @@ function voice(f, d, type, v, when, o) {
   g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + (o.att || .005)); g.gain.exponentialRampToValueAtTime(.001, t + d);
   let n = os;
   if (o.cut) { const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(o.cut, t); if (o.sweep) fl.frequency.exponentialRampToValueAtTime(o.sweep, t + d); os.connect(fl); n = fl; }
-  n.connect(g); g.connect(MG); if (o.fx) g.connect(fxOut()); os.start(t); os.stop(t + d + .03);
+  n.connect(g); g.connect(musicBus); if (o.fx) g.connect(fxOut()); os.start(t); os.stop(t + d + .03);
 }
 function lead(kind, f, w, v) {
   switch (kind) {
@@ -99,8 +130,30 @@ function lead(kind, f, w, v) {
     case 'cow': voice(f, .22, 'square', v * .5, w, { cut: 3500, fx: 1 }); voice(f * 1.48, .22, 'square', v * .4, w, { cut: 3500 }); break;
   }
 }
+let courierTrack = null, courierAssetTried = false, courierTrackURL = '', courierPlaying = false;
+function syncCourierTrack() {
+  const active = S?.ch === 0 && fs?.boss?.type === 'courier' && !fs.boss.dead && !fs.done;
+  if (active && !courierTrack && !courierAssetTried) {
+    courierAssetTried = true;
+    setCourierTrack('assets/courier.mp3');
+  }
+  if (!courierTrack) return false;
+  courierTrack.volume = muted ? 0 : OPT.vol * .6;
+  if (!active || mode !== 'fight') {
+    if (!courierTrack.paused) courierTrack.pause();
+    if (!active && courierTrack.currentTime) courierTrack.currentTime = 0;
+    courierPlaying = false;
+    return false;
+  }
+  if (!courierPlaying) {
+    courierPlaying = true;
+    courierTrack.play().catch(() => {});
+  }
+  return !courierTrack.paused;
+}
 function music() {
-  if (!AC || muted || !S || mode === 'menu' || mode === 'pause' || mode === 'end') return;
+  if (syncCourierTrack() || mode === 'dev') return;
+  if (!AC || muted || !S || mode === 'menu' || mode === 'pause' || mode === 'settings' || mode === 'end') return;
   const ch = Math.min(S.ch, MUS.length - 1), m = MUS[ch]; if (mCh !== ch) { mCh = ch; mMel = mkMel(ch); mStep = 0; }
   const sp = 60 / m.bpm / 4, hot = mode === 'fight' && !!fs && !fs.done, boss = hot && !!fs.boss;
   if (mNext < AC.currentTime) mNext = AC.currentTime + .05;
@@ -140,10 +193,10 @@ const lock = () => { try { if (document.pointerLockElement !== C && C.requestPoi
 function inputDir() { const ix = (K[KM.right] ? 1 : 0) - (K[KM.left] ? 1 : 0), iy = (K[KM.up] ? 1 : 0) - (K[KM.down] ? 1 : 0), c = Math.cos(camYaw), s = Math.sin(camYaw); return [c * iy - s * ix, s * iy + c * ix]; }
 function pushOut(o, r) { for (const b of obs) { const dx = o.x - b.x, dy = o.y - b.y, m = b.r + r, d2 = dx * dx + dy * dy; if (d2 < m * m && d2 > .01) { const d = Math.sqrt(d2); o.x = b.x + dx / d * m; o.y = b.y + dy / d * m; } } }
 
-let OPT = { sens: 1, vol: 1, q: 'auto', fps: false }; try { Object.assign(OPT, JSON.parse(localStorage.getItem('goc_opts') || '{}')); } catch (e) {}
+let OPT = { sens: 1, vol: 1, voice: .85, q: 'auto', fps: false }; try { Object.assign(OPT, JSON.parse(localStorage.getItem('goc_opts') || '{}')); } catch (e) {}
 { const qs = new URLSearchParams(location.search); if (['auto', 'lo', 'mid', 'hi'].includes(qs.get('q'))) OPT.q = qs.get('q'); if (qs.has('fps')) OPT.fps = qs.get('fps') === '1'; }
-const KDEF = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', dodge: 'Space', block: 'ShiftLeft', interact: 'KeyF', thr: 'KeyC', rune: 'KeyE', adlib: 'KeyQ', rage: 'KeyR', w1: 'Digit1', w2: 'Digit2', w3: 'Digit3', menu: 'Tab', full: 'F11', fps: 'F3', mute: 'KeyM' };
-const KLAB = { up: 'Вперёд', down: 'Назад', left: 'Влево', right: 'Вправо', dodge: 'Перекат', block: 'Блок / парирование', interact: 'Действие / добивание', thr: 'Бросок биты', rune: 'Руна оружия', adlib: 'Ад-либ кента', rage: 'Перегруз / ульта', w1: 'Бита', w2: 'Микрофон', w3: 'Сэмплер', menu: 'Прокачка', full: 'Полный экран', fps: 'Счётчик FPS', mute: 'Звук вкл/выкл' };
+const KDEF = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', dodge: 'Space', sprint: 'ControlLeft', block: 'ShiftLeft', interact: 'KeyF', thr: 'KeyC', rune: 'KeyE', adlib: 'KeyQ', rage: 'KeyR', w1: 'Digit1', w2: 'Digit2', w3: 'Digit3', menu: 'Tab', full: 'F11', fps: 'F3', mute: 'KeyM' };
+const KLAB = { up: 'Вперёд', down: 'Назад', left: 'Влево', right: 'Вправо', dodge: 'Перекат', sprint: 'Спринт', block: 'Блок / парирование', interact: 'Действие / добивание', thr: 'Бросок биты', rune: 'Руна оружия', adlib: 'Ад-либ кента', rage: 'Перегруз / ульта', w1: 'Бита', w2: 'Микрофон', w3: 'Сэмплер', menu: 'Прокачка', full: 'Полный экран', fps: 'Счётчик FPS', mute: 'Звук вкл/выкл' };
 const KM = Object.assign({}, KDEF, OPT.keys || {});
 let BIND = null, fsWant = new URLSearchParams(location.search).get('fs') === '1';
 function KN(a) {
@@ -156,7 +209,8 @@ let DYN = 1, upT = 0, fpsN = 60, shF = 0, VIG = null;
 const saveOpt = () => { try { localStorage.setItem('goc_opts', JSON.stringify(OPT)); } catch (e) {} };
 let tipQ = [], tipT = 0, waves = [], mdlTot = 0, mdlDone = 0, padPrev = [], padKeys = {}, stepT = 0;
 function tip(id, text) { if (!S || !S.tips || S.tips[id]) return; S.tips[id] = 1; tipQ.push(text); }
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+let devSession = false, devGod = false, devFrom;
+const save = () => { if (devSession) return; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } };
 const sk = id => !!S.sk[id];
 const BOONS = {
@@ -206,6 +260,14 @@ function makeDeco() {
   for (const r of LV.rooms) {
     const big = r.kind === 'fight' || r.kind === 'boss', spots = [];
     for (let i = 0, n = Math.round(r.w * r.h / 110000); i < n; i++) deco.push({ x: rnd(r.x + 70, r.x + r.w - 70), y: rnd(r.y + 70, r.y + r.h - 70), s: rnd(.6, 1.3), v: Math.random(), k });
+    if (tomskArch(r)) {
+      for (const [dx, dy] of [[-230, -130], [35, 130], [230, -105]]) {
+        const cover = { x: r.cx + dx, y: r.cy + dy, r: 59, s: 1, v: 0, k, solid: true, cover: true };
+        deco.push(cover);
+        obs.push(cover);
+      }
+      continue;
+    }
     if (big) {
       for (let t = 0, n = r.kind === 'boss' ? 6 : 9; spots.length < n && t < 300; t++) {
         const x = rnd(r.x + 90, r.x + r.w - 90), y = rnd(r.y + 90, r.y + r.h - 90);
@@ -306,11 +368,17 @@ function hitProps(x, y, r, byPlayer) {
 function startEnc(room, waves, bossId, cb) {
   fs = { room, waves, i: 0, boss: null, done: false, clearT: 0, cb }; ens = []; prj = []; haz = [];
   if (!bossId && room.kind === 'fight' && S.ch >= 1 && Math.random() < .55) fs.mut = Object.keys(MUTS)[Math.floor(Math.random() * 5)];
-  if (bossId) spawnBoss(bossId); else spawnWave();
+  if (tomskOpening(room)) fs.training = true;
+  if (tomskArch(room)) {
+    fs.arch = true;
+    toast('Держи ' + KN('sprint') + ', чтобы перебежать за укрытие', 5);
+  }
+  if (fs.training) openTomskGuide();
+  else if (bossId) spawnBoss(bossId); else spawnWave();
   sfx.boom(); shake = 8; waves = []; if (hb('open')) P.swag = Math.max(P.swag, 40);
   if (fs.mut) banner(MUTS[fs.mut][0], 'мутатор: ' + MUTS[fs.mut][1] + ' · опыта больше', '#ff5cc8');
-  tip('atk', 'ЛКМ — серия ударов, третий в серии сильнее. ПКМ — тяжёлый удар; держи ПКМ, чтобы зарядить его.');
-  tip('def', 'ПРОБЕЛ — перекат сквозь удар: в последний момент он замедляет время. SHIFT вовремя — парирование.');
+  if (!tomskOpening(room)) tip('atk', 'ЛКМ — серия ударов, третий в серии сильнее. ПКМ — тяжёлый удар; держи ПКМ, чтобы зарядить его.');
+  if (!tomskOpening(room)) tip('def', 'ПРОБЕЛ — перекат сквозь удар: в последний момент он замедляет время. SHIFT вовремя — парирование.');
   if (S.step > 1) tip('thr', 'C — бросить биту, ещё раз C — вернуть её. Бита бьёт всех на пути туда и обратно.');
   if (bossId) tip('boss', 'У босса полоса разделена на фазы — в каждой новые атаки. Красный блик над врагом: атаку не отбить, уходи перекатом.');
   if (room.kind === 'fight' && S.ch >= 1) { fs.traps = []; for (let t = 0; fs.traps.length < 3 && t < 40; t++) { const x = rnd(room.x + 150, room.x + room.w - 150), y = rnd(room.y + 150, room.y + room.h - 150); if (Math.hypot(x - room.cx, y - room.cy) > 220 && !fs.traps.some(q => Math.hypot(q.x - x, q.y - y) < 260)) fs.traps.push({ x, y }); } fs.trT = 4; }
@@ -334,7 +402,7 @@ function pump() {
       const r = LV.stepRoom[S.step]; objRoom = r;
       if (inR(r, P.x, P.y, 110)) {
         startEnc(r, st.t === 'boss' ? null : st.w, st.t === 'boss' ? st.id : null, () => { S.step++; save(); if (st.t === 'boss' && S.ch < CH.length - 1) offerBoon(); });
-        if (st.t === 'fight' && steps().slice(0, S.step).filter(q => q.t === 'fight').length === 1) { fs.surv = 45; fs.pool = st.w.flat().map(q => q[0]); toast('⏱ ВЫЖИВИ 45 секунд — враги идут без остановки', 4); }
+        if (st.t === 'fight' && !fs.arch && steps().slice(0, S.step).filter(q => q.t === 'fight').length === 1) { fs.surv = 45; fs.pool = st.w.flat().map(q => q[0]); toast('⏱ ВЫЖИВИ 45 секунд — враги идут без остановки', 4); }
       }
       break;
     }
@@ -383,7 +451,7 @@ function talk(o) {
 const FINC = [[['b1', .28], ['b3', .44]], [['p1', .2], ['p2', .2], ['kick', .36]], [['m3', .26], ['mh', .5]], [['kick', .28], ['bh', .5]], [['m1', .24], ['m2', .24], ['v1', .36]]];
 const FIN = { bat: [['kick', .34], ['bh', .64]], mic: [['m3', .3], ['mh', .62]], vinyl: [['p1', .26], ['kick', .3], ['v1', .46]], fist: [['p1', .22], ['p2', .22], ['kick', .42]] };
 function doFinish(e, chain) {
-  if (P.fin) return;
+  if (P.fin || tomskDrillPending()) return;
   if (chain) { const n = 8; for (let i = 0; i <= n; i++) burst(P.x + (e.x - P.x) * i / n, P.y + (e.y - P.y) * i / n, '#ffe14a', 2); }
   const a = chain ? ang(e, P) + rnd(-.9, .9) : ang(e, P); P.x = e.x + Math.cos(a) * (e.r + P.r + 16); P.y = e.y + Math.sin(a) * (e.r + P.r + 16);
   if (fs) { P.x = RX(P.x, P.r); P.y = RY(P.y, P.r); }
@@ -429,21 +497,85 @@ function doInteract() {
 
 /* ---------- диалоги ---------- */
 let dq = [], di = 0, dch = 0, dfull = '', dlgCb = null;
-function startDlg(lines, cb) { mode = 'dlg'; dq = lines; di = 0; dlgCb = cb; show('dlg', true); showLine(); }
+const DIALOG_SKIP_SECONDS = 1;
+let dialogHold = null;
+function resetDialogHold() {
+  dialogHold = null;
+  $('dialogSkipFill').style.strokeDashoffset = 100;
+}
+// Each speaker has a base pitch and oscillator waveform.
+const VOICE_PROFILES = {
+  N: [430, 'sine'], V: [145, 'triangle'], M: [480, 'square'], MV: [310, 'triangle'],
+  K: [390, 'square'], S: [125, 'sine'],
+  B1: [165, 'triangle'], B2: [110, 'sawtooth'], B3: [520, 'triangle'],
+  B4: [285, 'square'], B5: [215, 'triangle'], B6: [135, 'square'],
+  B7: [330, 'sawtooth'], B8: [175, 'sine'], B9: [95, 'sawtooth']
+};
+let dialogueSpeaker = 'N', lastDialogueBlip = -Infinity;
+const voiceNotes = new Set();
+function stopVoice() {
+  for (const note of voiceNotes) {
+    note.disconnect();
+    note.stop();
+  }
+  voiceNotes.clear();
+}
+function voiceBlip(speaker, char, offset = 0) {
+  if (!AC || muted || !OPT.vol || !OPT.voice) return;
+  const [base, wave] = VOICE_PROFILES[speaker] || [270, 'triangle'];
+  const pitch = base * (1 + ((char.codePointAt(0) % 7) - 3) * .045);
+  const time = AC.currentTime + offset;
+  const note = AC.createOscillator(), gain = AC.createGain();
+  note.type = wave;
+  note.frequency.setValueAtTime(pitch, time);
+  note.frequency.exponentialRampToValueAtTime(pitch * .78, time + .045);
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(OPT.voice * (wave === 'square' || wave === 'sawtooth' ? .09 : .16), time + .006);
+  gain.gain.exponentialRampToValueAtTime(.001, time + .052);
+  note.connect(gain).connect(MG);
+  voiceNotes.add(note);
+  note.onended = () => { voiceNotes.delete(note); note.disconnect(); gain.disconnect(); };
+  note.start(time);
+  note.stop(time + .055);
+}
+function dialogueBlip(chunk) {
+  const char = chunk.match(/[\p{L}\p{N}]/u)?.[0];
+  if (!char || !AC || AC.currentTime - lastDialogueBlip < .045) return;
+  lastDialogueBlip = AC.currentTime;
+  voiceBlip(dialogueSpeaker, char);
+}
+function bossSpeech(e, text) {
+  if (!text) return;
+  e.say = text;
+  e.sayT = 2.4;
+  e.lastVoiceAt = T;
+  stopVoice();
+  const syllables = text.match(/[\p{L}\p{N}]/gu) || [];
+  syllables.slice(0, 7).forEach((char, i) => voiceBlip('B' + (S.ch + 1), char, i * .064));
+}
+const BOSS_ATTACK_LINES = {
+  slam: 'Под ногами!', leap: 'Сверху!', charge: 'С дороги!',
+  fan: 'Лови залп!', mines: 'Следи за шагом!', shock: 'Лови волну!',
+  burst: 'Залп!', rain: 'Смотри вверх!', beam: 'Луч пошёл!',
+  spiral: 'Не стой на месте!', summon: 'Все сюда!', tp: 'Ищи меня!',
+  homing: 'Догонит!', wall: 'Проход закрыт!'
+};
+function startDlg(lines, cb) { resetDialogHold(); mode = 'dlg'; dq = lines; di = 0; dlgCb = cb; show('dlg', true); showLine(); }
 function showLine() {
   const i = dq[di].indexOf('|'), k = dq[di].slice(0, i), s = SPK[k];
   dfull = dq[di].slice(i + 1); dch = 0;
+  stopVoice(); dialogueSpeaker = k; lastDialogueBlip = -Infinity;
   $('dname').textContent = s.n; $('dname').style.color = s.c; $('dlg').style.borderLeftColor = s.c;
   $('dtext').className = k === 'M' ? 'msg' : k === 'N' ? 'nar' : ''; $('dtext').textContent = '';
   if (k === 'MV') { sfx.adlib(); shake = 6; }
 }
 function advDlg() {
   if (mode !== 'dlg') return;
-  if (dch < dfull.length) { dch = dfull.length; $('dtext').textContent = dfull; return; }
+  if (dch < dfull.length) { stopVoice(); dch = dfull.length; $('dtext').textContent = dfull; return; }
   di++; sfx.ui();
   if (di >= dq.length) endDlg(); else showLine();
 }
-function endDlg() { show('dlg', false); const cb = dlgCb; dlgCb = null; mode = 'fight'; if (cb) cb(); }
+function endDlg() { stopVoice(); resetDialogHold(); show('dlg', false); const cb = dlgCb; dlgCb = null; mode = 'fight'; if (cb) cb(); }
 
 /* ---------- концовки ---------- */
 function ending(a) {
@@ -472,9 +604,17 @@ function mkEnemy(type, x, y) {
     state: 'idle', t: 0, cdT: rnd(.6, 2), aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: .7, fl: 0, xp: Math.round(d.xp * .42 * (1 + S.ch * .15)), rng: d.rng || 50 };
 }
 function spawnWave() {
+  if (fs.arch) {
+    const { cx, cy } = fs.room;
+    ens.push(mkEnemy('bot', cx - 55, cy - 175), mkEnemy('bot', cx + 85, cy + 55));
+    const hater = mkEnemy('hater', cx + 375, cy - 20);
+    hater.guardPost = true;
+    ens.push(hater);
+    return;
+  }
   if (S.ch >= 2 && fs.room.kind === 'fight') for (let i = 0, N = 1 + (S.ch / 3 | 0); i < N; i++) { const p = edgePos(); ens.push(mkEnemy('mod', p.x, p.y)); tip('mod', 'Модератор со щитом блокирует лёгкие удары спереди. Сломай щит тяжёлым ударом [ПКМ] или броском биты.'); }
   for (const [type, n, el] of fs.waves[fs.i]) {
-    const N = el ? n : Math.ceil(n * (EN[type].ai === 'ranged' ? 2 : 1.6));
+    const N = el || fs.training ? n : Math.ceil(n * (EN[type].ai === 'ranged' ? 2 : 1.6));
     for (let i = 0; i < N; i++) { const p = edgePos(), m = mkEnemy(type, p.x, p.y); if (el) { m.hp = m.maxhp = m.hp * 2.6; m.dmg *= 1.3; m.r *= 1.3; m.xp *= 4; m.el = 1; } ens.push(m); }
   }
 }
@@ -517,8 +657,8 @@ function updThrow(dt) {
   if (b.st !== 'stuck') hitProps(b.x, b.y, 22, true);
   if (b.st === 'out') { b.x += Math.cos(b.a) * 980 * dt; b.y += Math.sin(b.a) * 980 * dt; b.t -= dt; if (b.t <= 0 || !(fs ? inR(fs.room, b.x, b.y, 12) : okPos(b.x, b.y, 12)) || obs.some(o => (o.x - b.x) ** 2 + (o.y - b.y) ** 2 < o.r * o.r)) { b.st = 'stuck'; b.t = 3; } }
   else if (b.st === 'stuck') { b.t -= dt; if (b.t <= 0) { b.st = 'back'; b.hit = new Set(); } }
-  else { const a = ang(b, P); b.x += Math.cos(a) * 1300 * dt; b.y += Math.sin(a) * 1300 * dt; if (dist(b, P) < 36) { P.thr = null; sfx.block(); P.swag = Math.min(100, P.swag + 4); return; } }
-  if (b.st !== 'stuck') { const dm = WP.bat.heavy.dmg * dmgMul('bat') * .75; for (const e of ens) if (!e.dead && e.spawn <= 0 && !b.hit.has(e) && dist(e, b) < e.r + 24) { b.hit.add(e); dmgE(e, dm, { w: 'bat', kb: 200, heavy: true, stun: b.st === 'back' ? .5 : 0 }); sfx.hit(true); } }
+  else { const a = ang(b, P); b.x += Math.cos(a) * 1300 * dt; b.y += Math.sin(a) * 1300 * dt; if (dist(b, P) < 36) { if (b.hitEnemy) completeTomskDrill('throw'); P.thr = null; sfx.block(); P.swag = Math.min(100, P.swag + 4); return; } }
+  if (b.st !== 'stuck') { const dm = WP.bat.heavy.dmg * dmgMul('bat') * .75; for (const e of ens) if (!e.dead && e.spawn <= 0 && !b.hit.has(e) && dist(e, b) < e.r + 24) { b.hit.add(e); b.hitEnemy = true; dmgE(e, dm, { w: 'bat', kb: 200, heavy: true, stun: b.st === 'back' ? .5 : 0 }); sfx.hit(true); } }
 }
 function swW(w) { if (!S.wl[w] || S.weapon === w) return; S.weapon = w; P.atk = null; P.chg = 0; P.swT = 1.2; }
 function react(e, dmg, o) {
@@ -560,6 +700,10 @@ function doHit(a, em) {
   const hit = [];
   for (const e of ens) { if (e.dead || e.spawn > 0) continue; if (dist(e, P) <= range + e.r && (arc >= TAU || adiff(ang(P, e), a.a) <= arc / 2)) hit.push(e); }
   for (const o of ents) { if (o.dead) continue; if (o.k === 'brk' && dist(o, P) <= range + o.r && (arc >= TAU || adiff(ang(P, o), a.a) <= arc / 2)) breakIt(o); else if (o.k === 'swall' && dist(o, P) <= range + 70 && (arc >= TAU || adiff(ang(P, o), a.a) <= arc / 2 + .4)) hitWall(o, a.heavy || fin3); }
+  if (hit.length && w === 'bat') {
+    if (a.heavy) completeTomskDrill('heavy');
+    else completeTomskDrill('light');
+  }
   for (const e of hit) dmgE(e, base * mult, { w, kb: d.kb * (fin3 ? 1.6 : 1), stun, heavy: a.heavy || fin3 && w === 'bat' });
   if (w === 'bat' && a.heavy && sk('b1')) {
     const cx = P.x + Math.cos(a.a) * range * .8, cy = P.y + Math.sin(a.a) * range * .8;
@@ -594,8 +738,9 @@ function dmgE(e, dmg, o) {
   if (o.w) { dmg = react(e, dmg, o); P.hits = (P.hitT > 0 ? P.hits || 0 : 0) + 1; P.hitT = 2.4; styleAdd(o.w !== P.lastW ? .22 : .07); P.lastW = o.w; if (o.heavy) flashAt(e.x, e.y, WP[o.w].col, 1.6); }
   if (o.w === 'bat' && e.stun > 0 && sk('b4')) dmg *= 1.5;
   e.hp -= dmg; e.fl = .1;
+  if (tomskDrillPending()) e.hp = Math.max(1, e.hp);
   e.sm = (e.sm || 0) + dmg / e.maxhp * (o.heavy ? .45 : .8) * (e.boss ? 2 : 1) + (o.sm || 0);
-  if (e.sm >= 1 && !e.fin && e.hp > 0) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [' + KN('interact') + ']', '#ffe14a', 1); tip('fin', 'Враг оглушён: подойди и нажми F — добивание лечит. Если оглушено несколько, добивания пойдут серией.'); }
+  if (e.sm >= 1 && !e.fin && e.hp > 0 && !tomskDrillPending()) { e.fin = true; e.stun = Math.max(e.stun, e.boss ? 2.5 : 4.5); float(e.x, e.y - e.r - 30, 'ДОБЕЙ!  [' + KN('interact') + ']', '#ffe14a', 1); tip('fin', 'Враг оглушён: подойди и нажми F — добивание лечит. Если оглушено несколько, добивания пойдут серией.'); }
   float(e.x + rnd(-10, 10), e.y - e.r - 6, Math.round(dmg), dmg > 60 ? '#ffd23b' : '#fff');
   burst(e.x, e.y, e.c, 3); { const ha = ang(P, e), hc = o.w ? WP[o.w].col : '#ffffff'; sparks(e.x, e.y, ha, o.heavy ? 14 : 7, o.heavy ? '#ffffff' : hc); fxGlow(e.x, e.y, hc, o.heavy ? 150 : 80, .16, e.r * 1.8 + (e.air || 0)); if (o.heavy) punch = Math.max(punch, 4); }
   if (P.rage <= 0 && !(P.swLock > 0)) P.swag = Math.min(100, P.swag + Math.min(dmg, 90) * .08 * (has('energy') ? 1.4 : 1) * (1 + .25 * S.st.swag) * (o.w === 'mic' && sk('m4') ? 2 : 1));
@@ -618,17 +763,21 @@ function kill(e, o) {
   burst(e.x, e.y, e.c, e.boss ? 80 : 14); if (o && o.w && !e.boss) { const an = ang(P, e); e.kx += Math.cos(an) * 320; e.ky += Math.sin(an) * 320; if (e.m) { e.m.userData.kx = e.kx; e.m.userData.ky = e.ky; } }
   if (o && o.w === 'bat' && sk('b6')) P.hp = Math.min(maxHp(), P.hp + maxHp() * .012);
   if (e.boss) {
+    stopVoice();
     for (const q of ens) if (q !== e) { q.dead = true; burst(q.x, q.y, q.c, 8); }
     prj = []; haz = []; slowmo = 1.6; shake = 22; sfx.boom(); flash = .5; banner('СЕРВЕР ЗАЧИЩЕН', e.d.n + ' повержен', '#ffd23b'); flashAt(e.x, e.y, '#ffffff', 6);
   } else if (Math.random() < .1) orbs.push({ x: e.x, y: e.y, l: 12 });
 }
 function hurtP(dmg, src, isProj) {
   if (mode !== 'fight' || !fs || fs.done) return false;
+  if (devSession && devGod) return false;
   if (P.inv > 0) {
+    if (src && P.dodge > 0) completeTomskDrill('dodge');
     if (P.dodge > 0 && !(P.pdT > 0)) { P.pdT = 4; P.crit = 3; bt = hb('long') ? 1.8 : 1.15; styleAdd(.5); tone(700, .5, 'sine', .12, 120); P.swag = Math.min(100, P.swag + 8); float(P.x, P.y - 60, 'ТАЙМИНГ!', '#ffffff', 1); sfx.parry(); }
     return false;
   }
   if (P.block) {
+    if (src) completeTomskDrill('block');
     if (P.blockT < .2) {
       sfx.parry(); P.swag = Math.min(100, P.swag + 12); P.inv = .25; float(P.x, P.y - 40, 'ПАРИРОВАНИЕ', '#49e0ff', 1); styleAdd(.5); S.stat.parry++; if (hb('vamp')) P.hp = Math.min(maxHp(), P.hp + maxHp() * .06); flashAt(P.x, P.y, '#49e0ff', 2.5); ring(P.x, P.y, 60, '#49e0ff');
       if (src && !isProj) { src.sm = (src.sm || 0) + .5; src.stun = (src.boss ? .9 : 1.4) * (has('grillz') ? 1.6 : 1); if (!src.boss) src.state = 'idle'; }
@@ -639,7 +788,7 @@ function hurtP(dmg, src, isProj) {
   if (fs.mut === 'glass') dmg *= 1.35;
   dmg *= [.6, 1, 1.5][S.diff]; if (P.rage > 0) dmg *= .65;
   P.hits = 0; P.hitT = 0; P.hurtT = .3; sparks(P.x, P.y, rnd(0, TAU), 8, '#ff4040'); fxGlow(P.x, P.y, '#ff2020', 130, .2); P.style = Math.max(0, (P.style || 0) - 1.5);
-  P.hp -= dmg; P.inv = .4; shake = Math.max(shake, 10); flash = .25;
+  P.hp = fs.training && TOMSK_DRILLS[fs.i].action ? Math.max(1, P.hp - dmg) : P.hp - dmg; P.inv = .4; shake = Math.max(shake, 10); flash = .25;
   float(P.x, P.y - 30, '-' + Math.round(dmg), '#ff4040');
   if (P.hp <= 0) {
     if (S.comp >= 1 && S.diff < 2 && P.revCh !== S.ch) {
@@ -651,8 +800,8 @@ function hurtP(dmg, src, isProj) {
 }
 const TIPS = ['Перекат [ПРОБЕЛ] даёт неуязвимость — катись СКВОЗЬ удар.', 'Блок [SHIFT], нажатый в последний момент, парирует и оглушает.', 'Красная зона на полу — уходи из неё.',
   'Зелёные сферы лечат. Накрутчиков и хейтеров убивай первыми.', 'Не забывай про TAB: прослушивания ▶ и ленты ▣ тратятся на прокачку.', 'ПЕРЕГРУЗ [' + KN('rage') + '] вдвое режет входящий урон и лечит от ударов.'];
-function die() { S.stat.deaths++; try { const sv = load(); if (sv) { sv.stat = S.stat; localStorage.setItem(KEY, JSON.stringify(sv)); } } catch (e) {} mode = 'dead'; $('deadTip').textContent = TIPS[Math.floor(rnd(0, TIPS.length))]; show('dead', true); sfx.boom(); }
-function retry() { show('dead', false); const sw = P.swag; S = load() || S; P.hp = maxHp(); P.swag = sw * .5; P.rage = 0; loadLevel(); mode = 'fight'; lock(); }
+function die() { stopVoice(); S.stat.deaths++; try { const sv = load(); if (sv && !devSession) { sv.stat = S.stat; localStorage.setItem(KEY, JSON.stringify(sv)); } } catch (e) {} mode = 'dead'; $('deadTip').textContent = TIPS[Math.floor(rnd(0, TIPS.length))]; show('dead', true); sfx.boom(); }
+function retry() { if (devSession) { jumpToCourier(); return; } show('dead', false); const sw = P.swag; S = load() || S; P.hp = maxHp(); P.swag = sw * .5; P.rage = 0; loadLevel(); mode = 'fight'; lock(); }
 
 function doRune() {
   const w = S.weapon, id = { bat: 'b5', mic: 'm5', vinyl: 'v5' }[w];
@@ -698,6 +847,7 @@ function updPlayer(dt) {
   P.block = !!(K[KM.block] || (KM.block === 'ShiftLeft' && K.ShiftRight)) && !P.atk && P.dodge <= 0 && P.spin <= 0;
   if (P.block) P.blockT += dt; else P.blockT = 0;
   let sp = 255 * (has('kicks') ? 1.12 : 1) * (P.chg > .15 ? .5 : 1) * (P.buff > 0 ? 1.3 : 1) * (P.rage > 0 ? 1.2 : 1);
+  if ((K[KM.sprint] || (KM.sprint === 'ControlLeft' && K.ControlRight)) && !P.block && !P.atk && !P.chg && P.dodge <= 0 && P.spin <= 0) sp *= 1.6;
   if (P.block) sp *= .4; if (P.atk) sp *= P.atk.heavy ? .25 : .55;
   if (P.dodge > 0) { P.dodge -= dt; P.x += P.dvx * dt; P.y += P.dvy * dt; if (P.dodge <= 0) P.post = .4; }
   else { P.x += mx * sp * dt; P.y += my * sp * dt; }
@@ -768,6 +918,11 @@ function updEnemy(e, dt) {
       else { e.state = 'wind'; e.t = e.d.wind * agg; e.aa = a; }
       break;
     case 'ranged':
+      if (e.guardPost && d > 620) break;
+      if (e.guardPost && d >= 165) {
+        if (e.cdT <= 0) { e.state = 'wind'; e.t = .48; e.cdT = e.d.cd; }
+        break;
+      }
       if (d < 230) moveE(e, a + Math.PI, sp, dt); else if (d > 420) moveE(e, a, sp, dt); else moveE(e, a + Math.PI / 2, sp * .4, dt);
       if (e.cdT <= 0 && d < 620) { e.state = 'wind'; e.t = .3; e.cdT = e.d.cd * rnd(.8, 1.15) * agg; }
       break;
@@ -806,7 +961,7 @@ function strike(e) {
 const WIND = { mines: .5, shock: .7, beam: .85, slam: .8, leap: .95, charge: .75, fan: .5, burst: .6, spiral: .5, rain: .5, summon: .7, tp: .45, homing: .5, wall: .7 };
 function updBoss(e, dt) {
   const L = e.d.phases.length, ph = Math.min(L - 1, Math.floor((1 - e.hp / e.maxhp) * L));
-  if (ph !== e.ph) { e.ph = ph; e.say = e.d.barks[ph] || ''; e.sayT = 3.2; ring(e.x, e.y, 220, e.c); shake = 12; sfx.boom(); e.cdT = .8; }
+  if (ph !== e.ph) { e.ph = ph; bossSpeech(e, e.d.barks[ph]); ring(e.x, e.y, 220, e.c); shake = 12; sfx.boom(); e.cdT = .8; }
   if (e.sayT > 0) e.sayT -= dt;
   if (e.beam) { const b = e.beam, d = dist(e, P); b.t -= dt; b.a += b.dir * (1.35 + e.ph * .12) * dt; if (d < 740 && adiff(ang(e, P), b.a) < Math.atan2(22, Math.max(d, 30)) + .02) hurtP(e.dmg * .9, null, true); if (b.t <= 0) e.beam = null; }
   if (e.spiral) {
@@ -832,6 +987,7 @@ function updBoss(e, dt) {
         const list = e.d.phases[ph]; let m = list[Math.floor(rnd(0, list.length))];
         if (m === e.last) m = list[(list.indexOf(m) + 1) % list.length];
         if (m === 'slam' && d > 260) m = list.includes('leap') ? 'leap' : (list.find(q => q !== 'slam') || 'slam');
+        if (T - (e.lastVoiceAt ?? -Infinity) >= 2.5) bossSpeech(e, BOSS_ATTACK_LINES[m]);
         e.mv = e.last = m; e.state = 'wind'; e.t = WIND[m]; e.aa = a; e.tx = P.x; e.ty = P.y; e.cdT = e.d.gap / mad;
       }
   }
@@ -956,8 +1112,17 @@ function update(dt) {
     if (fs.spT <= 0 && ens.length < 12) { fs.spT = 2.4; for (let i = 0; i < 2 + (S.ch > 4 ? 1 : 0); i++) { const p = edgePos(); ens.push(mkEnemy(fs.pool[Math.floor(Math.random() * fs.pool.length)], p.x, p.y)); } }
     if (fs.surv <= 0) { for (const q of ens) { q.dead = true; burst(q.x, q.y, q.c, 8); } fs.done = true; fs.clearT = 1.4; float(P.x, P.y - 60, 'ВЫЖИЛ', '#7dff7d', 1); sfx.buy(); }
   } else if (fs && !fs.done && ens.length === 0) {
-    if (fs.waves && fs.i < fs.waves.length - 1) { fs.i++; spawnWave(); }
-    else { fs.done = true; fs.clearT = fs.boss ? 2.4 : 1.5; if (!fs.boss) { banner('ЧИСТО', 'комната зачищена', '#7dff7d'); slowmo = Math.max(slowmo, .55); } }
+    if (tomskDrillPending()) {
+      spawnWave();
+    } else if (fs.waves && fs.i < fs.waves.length - 1) {
+      fs.i++;
+      fs.drillDone = false;
+      if (fs.training) {
+        if (!tomskDrillPending()) P.hp = maxHp();
+        openTomskGuide();
+      } else spawnWave();
+    }
+    else { if (fs.training) P.hp = maxHp(); fs.done = true; fs.clearT = fs.boss ? 2.4 : 1.5; if (!fs.boss) { banner('ЧИСТО', 'комната зачищена', '#7dff7d'); slowmo = Math.max(slowmo, .55); } }
   }
   if (fs && fs.done) { fs.clearT -= dt; if (fs.clearT <= 0) { const cb = fs.cb; prj = []; haz = []; fs = null; if (cb) cb(); } }
   if (mode === 'fight') { if (!fs) pump(); if (mode === 'fight') scan(); }
@@ -998,7 +1163,7 @@ function aimPoint() {
   _nd.set(M.x / W * 2 - 1, -(M.y / H * 2 - 1)); _ray.setFromCamera(_nd, CAM);
   return _ray.ray.intersectPlane(_pl, _hit) ? { x: _hit.x, y: _hit.z } : { x: P.x + Math.cos(P.aim), y: P.y + Math.sin(P.aim) };
 }
-function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual] * DYN); if (R3 && PPC) { const pr = R3.getPixelRatio(); PPC.setPixelRatio(pr); PPC.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
+function setPR() { if (R3) R3.setPixelRatio(Math.min(2, Math.max(.8, screenScale() * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual] * DYN); if (R3 && PPC) { const pr = R3.getPixelRatio(); PPC.setPixelRatio(pr); PPC.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
 addEventListener('resize', setPR);
 
 function init3d() {
@@ -1187,7 +1352,11 @@ function buildWorld(th) {
   }
   for (const d of deco) {
     const x = d.x, z = d.y, s = d.s, v = d.v; let p = null;
-    if (!d.solid) {
+    if (d.cover) {
+      p = new T3.Group();
+      p.position.set(x, 0, z);
+      p.add(box(88, 72, 76, '#545b67', 0, 36, 0), box(88, 6, 76, '#bac8db', 0, 74, 0));
+    } else if (!d.solid) {
       if (d.k === 'swamp' && MDL.p_waterlily_A) { p = new T3.Group(); const w = sph(1, '#0b1a12', 0, 0, 0, { roughness: .08, metalness: .3, transparent: true, opacity: .85 }); w.scale.set(74 * s, 1.2, 44 * s); w.castShadow = false; const ly = prop('p_waterlily_A', 7); ly.position.set((v - .5) * 50, 1, (v - .5) * 20); p.add(w, ly); p.position.set(x, .6, z); }
       else if (d.k === 'snow') { p = sph(1, '#7f93b4', x, 0, z); p.scale.set(60 * s, 9 * s, 36 * s); p.castShadow = false; }
       else if (d.k === 'swamp') { p = sph(1, '#3d6b2e', x, 0, z, { transparent: true, opacity: .75 }); p.scale.set(80 * s, 4, 46 * s); p.castShadow = false; }
@@ -1245,12 +1414,90 @@ function buildWorld(th) {
   }
   window.__bake = bakeStatic(worldG, new Set(ents.map(o => o.m).concat(movers.map(q => q.m), spinners).filter(Boolean)));
 }
+function tomskArch(room) {
+  return S.ch === 0 && room === LV.main[2];
+}
+function tomskOpening(room) {
+  return S.ch === 0 && room === LV.main[1];
+}
+const TOMSK_DRILLS = [
+  { action: 'light', title: 'Лёгкий удар', hint: () => 'Подойди к боту, наведи камеру и попади ЛКМ' },
+  { action: 'heavy', title: 'Тяжёлый удар', hint: () => 'Попади ПКМ · удерживай кнопку, чтобы зарядить удар' },
+  { action: 'dodge', title: 'Перекат', hint: () => 'Подпусти бота и нажми [' + KN('dodge') + '] в конце замаха' },
+  { action: 'block', title: 'Блок', hint: () => 'Зажми [' + KN('block') + '] и дождись удара · нажатие перед попаданием парирует' },
+  { action: 'throw', title: 'Бросок и возврат', hint: () => 'Наведи камеру, попади броском [' + KN('thr') + '] и верни биту той же клавишей' },
+  { title: 'Проверка', hint: () => 'Зачисти двор · хейтер атакует издалека, боты идут в ближний бой' }
+];
+const TOMSK_GUIDE = [
+  ['ЛКМ', 'Подойди на расстояние взмаха биты и наведи камеру на бота. Нажми левую кнопку мыши, чтобы ударить. Несколько нажатий подряд складываются в серию.'],
+  ['ПКМ', 'Нажми правую кнопку мыши и отпусти её, чтобы ударить. Если подержать кнопку, Пахан зарядит удар. Подойди к боту и попробуй попасть.'],
+  ['dodge', 'Подпусти бота и посмотри на его замах. Перекатись, когда удар вот-вот попадёт. В начале переката Пахан на короткое время становится неуязвим.'],
+  ['block', 'Зажми блок до того, как бот ударит. Блок уменьшает урон. Если нажать кнопку прямо перед попаданием, получится парирование.'],
+  ['thr', 'Наведи камеру на бота и брось биту. После попадания нажми ту же кнопку, чтобы вернуть её. Бита может задеть врага и на обратном пути.'],
+  ['', 'Во дворе два бота и хейтер. Боты подходят вплотную, а хейтер стреляет издалека. Выбирай приёмы по ситуации и зачисти двор.']
+];
+function openTomskGuide() {
+  const [key, body] = TOMSK_GUIDE[fs.i];
+  $('guideCount').textContent = 'ТРЕНИРОВКА · ' + (fs.i + 1) + ' / ' + TOMSK_DRILLS.length;
+  $('guideTitle').textContent = TOMSK_DRILLS[fs.i].title;
+  $('guideKey').textContent = key && key !== 'ЛКМ' && key !== 'ПКМ' ? KN(key) : key;
+  $('guideKey').hidden = !key;
+  $('guideBody').textContent = body;
+  $('guideGo').textContent = key ? 'Попробовать' : 'Начать бой';
+  mode = 'guide';
+  M.l = M.r = false;
+  show('tomskGuide', true);
+  $('guideSkip').hidden = fs.i !== 0;
+  $('guideGo').focus();
+  guideMusic(true);
+}
+function beginTomskPractice() {
+  if (mode !== 'guide') return;
+  audio();
+  show('tomskGuide', false);
+  $('guideGo').blur();
+  $('guideSkip').blur();
+  M.l = M.r = false;
+  mode = 'fight';
+  guideMusic(false);
+  spawnWave();
+  lock();
+}
+$('guideGo').addEventListener('click', beginTomskPractice);
+$('guideSkip').addEventListener('click', () => {
+  if (mode !== 'guide' || fs.i !== 0) return;
+  fs.i = TOMSK_DRILLS.length - 1;
+  P.hp = maxHp();
+  beginTomskPractice();
+});
+function tomskDrillPending() {
+  return fs?.training && TOMSK_DRILLS[fs.i].action && !fs.drillDone;
+}
+function completeTomskDrill(action) {
+  if (!tomskDrillPending() || TOMSK_DRILLS[fs.i].action !== action) return;
+  fs.drillDone = true;
+  float(P.x, P.y - 65, 'Приём засчитан', '#7dff7d', 1.5);
+}
+function tomskHint() {
+  if (!fs && tomskOpening(objRoom)) {
+    return 'Камера — мышь · шаг — ' + [KN('up'), KN('left'), KN('down'), KN('right')].join(' / ') + ' · иди за жёлтой стрелкой';
+  }
+  if (!fs?.training) return '';
+  if (fs.done) return 'Тренировка пройдена';
+  const drill = TOMSK_DRILLS[fs.i];
+  return (fs.i + 1) + '/' + TOMSK_DRILLS.length + ' · ' + drill.title + ' · ' +
+    (fs.drillDone ? 'Приём засчитан. Добей бота.' : drill.hint());
+}
 function drawNav() {
   X.textBaseline = 'alphabetic';
   // цель
   let ob = '';
-  if (fs && !fs.done) ob = fs.boss ? 'Победи: ' + fs.boss.d.n : (fs.cb && fs.room.kind === 'side' ? 'Зачисти тупик' : 'Зачисти комнату');
+  if (fs?.arch && !fs.done) ob = 'Зачисти проход к арке · осталось: ' + ens.filter(e => !e.dead).length;
+  else if (fs && !fs.done) ob = fs.boss ? 'Победи: ' + fs.boss.d.n : (fs.cb && fs.room.kind === 'side' ? 'Зачисти тупик' : 'Зачисти комнату');
   else if (exitOpen()) ob = 'Войди в портал — к следующему серверу';
+  else if (tomskOpening(objRoom)) ob = 'Выйди во двор';
+  else if (tomskArch(objRoom)) ob = 'Доберись до прохода к арке';
+  else if (S.ch === 0 && objRoom?.kind === 'boss') ob = 'Иди к арке · там Курьер';
   else if (objRoom) ob = objRoom.kind === 'boss' ? 'Иди к арене босса' : 'Двигайся дальше — к следующей комнате';
   X.textAlign = 'left'; let y = 34;
   if (ob) { X.font = 'bold 15px "Russo One","Segoe UI"'; X.fillStyle = '#ffd23b'; X.fillText('◆ ' + ob, 30, y); y += 22; }
@@ -1391,14 +1638,28 @@ function loadModels() {
   const ld = new T3.GLTFLoader(), lt0 = performance.now(); let pend = 0; const fin = () => { mdlDone++; if (--pend <= 0) { builtDeco = null; window.__loadMs = Math.round(performance.now() - lt0); } };
   for (const k in window.GLB) {
     pend++; mdlTot++;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      fin();
+    };
+    const deadline = setTimeout(finish, 12000);
     try {
       const bs = atob(window.GLB[k]), u = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++) u[i] = bs.charCodeAt(i);
       ld.parse(u.buffer, '', g => {
-        const pk = window.GLBPACK && window.GLBPACK[k];
-        if (pk) g.scene.traverse(q => { if (!q.isMesh || Array.isArray(q.material)) return; const key = pk + '|' + q.material.name; let cm = PMAT[key]; if (!cm) { cm = PMAT[key] = q.material; cm.map = PT[pk] || null; cm.needsUpdate = true; } q.material = cm; });
-        else mergeSkinned(g.scene);
-        const bb = new T3.Box3().setFromObject(g.scene); MDL[k] = { kk: !!KK[k], scene: g.scene, clips: g.animations, h: (bb.max.y - bb.min.y) || 1, w: (bb.max.x - bb.min.x) || 1, y0: bb.min.y }; fin(); }, fin);
-    } catch (e) { fin(); /* модель не загрузилась — останутся фигуры из примитивов */ }
+        if (settled) return;
+        try {
+          const pk = window.GLBPACK && window.GLBPACK[k];
+          if (pk) g.scene.traverse(q => { if (!q.isMesh || Array.isArray(q.material)) return; const key = pk + '|' + q.material.name; let cm = PMAT[key]; if (!cm) { cm = PMAT[key] = q.material; cm.map = PT[pk] || null; cm.needsUpdate = true; } q.material = cm; });
+          else mergeSkinned(g.scene);
+          const bb = new T3.Box3().setFromObject(g.scene); MDL[k] = { kk: !!KK[k], scene: g.scene, clips: g.animations, h: (bb.max.y - bb.min.y) || 1, w: (bb.max.x - bb.min.x) || 1, y0: bb.min.y };
+        } catch (error) {
+          console.warn('Model setup failed:', k, error);
+        } finally { finish(); }
+      }, finish);
+    } catch (e) { finish(); /* модель не загрузилась — останутся фигуры из примитивов */ }
     window.GLB[k] = null;
   }
 }
@@ -1581,8 +1842,15 @@ function drawHud() {
   }
   { const q = proj(P.x + Math.cos(camYaw) * 300, P.y + Math.sin(camYaw) * 300, 30); X.beginPath(); X.arc(q.x, q.y, 5, 0, TAU); X.strokeStyle = 'rgba(255,255,255,.55)'; X.lineWidth = 1.5; X.stroke(); }
   X.textAlign = 'center'; X.font = '13px ' + FONT;
-  if (mode === 'fight' && document.pointerLockElement !== C) { X.fillStyle = 'rgba(255,210,59,.9)'; X.fillText('Кликни по игре, чтобы захватить мышь · без захвата камера крутится у краёв экрана', W / 2, H - 14); }
-  else if (S.ch === 0 && S.step < 5) { X.fillStyle = 'rgba(255,255,255,.75)'; X.fillText('WASD — ходить · мышь — камера · ЛКМ — удар · ПКМ — тяжёлый (держи — заряд) · ПРОБЕЛ — перекат · SHIFT — блок · C — бросок биты', W / 2, H - 14); }
+  if (mode === 'fight' && !fs?.training && document.pointerLockElement !== C) { X.fillStyle = 'rgba(255,210,59,.9)'; X.fillText('Кликни по игре, чтобы захватить мышь · без захвата камера крутится у краёв экрана', W / 2, H - 14); }
+  else if (mode === 'fight') {
+    const hint = tomskHint();
+    if (hint) {
+      const width = X.measureText(hint).width + 28;
+      X.fillStyle = 'rgba(8,10,16,.85)'; X.fillRect((W - width) / 2, H - 36, width, 30);
+      X.fillStyle = '#e8ecf4'; X.fillText(hint, W / 2, H - 16);
+    }
+  }
   X.textAlign = 'left';
 }
 function teleDecals(e) {
@@ -1598,7 +1866,7 @@ function teleDecals(e) {
 }
 function render() {
   if (R3) R3.info.reset();
-  X.setTransform(1, 0, 0, 1, 0, 0); X.clearRect(0, 0, W, H);
+  X.setTransform(C.width / W, 0, 0, C.height / H, 0, 0); X.clearRect(0, 0, W, H);
   if (T3 && (!S || !P || mode === 'menu')) { const nw = window.__clock != null ? window.__clock : performance.now() / 1000, fd = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? nw - lastNow : 0); lastNow = nw; menuScene(nw, fd); return; }
   if (!S || !P || !T3) return;
   if (!R3) init3d();
@@ -1875,16 +2143,31 @@ addEventListener('keydown', e => {
   if (BIND) return;
   if (c === 'Tab' || c === 'Space' || c === KM.menu || c === KM.dodge || c === KM.full || c === KM.fps) e.preventDefault();
   if (e.repeat) return;
+  if (c === 'F8') { e.preventDefault(); if (mode === 'dev') closeDev(); else openDev(); return; }
+  if (mode === 'dev') { if (c === 'Escape') closeDev(); return; }
   K[c] = true; audio();
   if (c === KM.full) { toggleFS(); return; }
-  if (c === KM.mute) { muted = !muted; toast(muted ? 'Звук выключен' : 'Звук включён', 1.2); }
+  if (c === KM.mute) { muted = !muted; if (muted) stopVoice(); toast(muted ? 'Звук выключен' : 'Звук включён', 1.2); }
   if (c === KM.fps) { OPT.fps = !OPT.fps; saveOpt(); }
-  if (mode === 'dlg') { if (c === 'Space' || c === 'Enter' || c === KM.dodge || c === KM.interact) advDlg(); else if (c === 'Escape') endDlg(); return; }
+  if (mode === 'guide') {
+    if (c === 'Enter' || c === 'Space' || c === KM.interact) {
+      e.preventDefault();
+      if (e.target === $('guideSkip')) $('guideSkip').click();
+      else beginTomskPractice();
+    }
+    return;
+  }
+  if (mode === 'dlg') {
+    if (c === 'Space' && e.isTrusted) dialogHold = performance.now();
+    else if (c === 'Enter' || c === KM.dodge || c === KM.interact) advDlg();
+    return;
+  }
   if (mode === 'up') { if (c === KM.menu || c === 'Escape') closeUp(); return; }
+  if (mode === 'settings') { if (c === 'Escape') closeSettings(); return; }
   if (mode === 'pause') { if (c === 'Escape') { show('pause', false); show('help', false); show('binds', false); mode = 'fight'; } return; }
   if (mode !== 'fight') return;
   if (cine) { if (cine.t > .4) cine = null; return; }
-  if (c === 'Escape') { mode = 'pause'; $('oD').value = S.diff; show('pause', true); return; }
+  if (c === 'Escape') { stopVoice(); mode = 'pause'; $('oD').value = S.diff; show('pause', true); return; }
   switch (Object.keys(KM).find(k => KM[k] === c)) {
     case 'dodge': doDodge(); break;
     case 'rune': doRune(); break;
@@ -1898,11 +2181,18 @@ addEventListener('keydown', e => {
     case 'menu': openUp(false); break;
   }
 });
-addEventListener('keyup', e => { K[e.code] = false; });
-addEventListener('blur', () => { for (const k in K) K[k] = false; M.l = M.r = false; });
+addEventListener('keyup', e => {
+  K[e.code] = false;
+  if (e.code === 'Space' && mode === 'dlg' && dialogHold !== null) {
+    const skip = performance.now() - dialogHold >= DIALOG_SKIP_SECONDS * 1000;
+    resetDialogHold();
+    if (skip) endDlg(); else advDlg();
+  }
+});
+addEventListener('blur', () => { resetDialogHold(); for (const k in K) K[k] = false; M.l = M.r = false; });
 const mpos = e => { const r = C.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return; M.x = (e.clientX - r.left) * W / r.width; M.y = (e.clientY - r.top) * H / r.height; };
 addEventListener('mousemove', e => { mpos(e); if (document.pointerLockElement === C) { camYaw += e.movementX * .0026 * OPT.sens; camPit = clamp(camPit + e.movementY * .0014 * OPT.sens, .1, .85); } });
-document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== C && mode === 'fight') { mode = 'pause'; $('oD').value = S.diff; show('pause', true); } });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== C && mode === 'fight') { stopVoice(); mode = 'pause'; $('oD').value = S.diff; show('pause', true); } });
 C.addEventListener('mousedown', e => { audio(); mpos(e); if (mode === 'fight' || mode === 'dlg') lock(); if (e.button === 0) M.l = true; if (e.button === 2) M.r = true; if (e.button === 1) { e.preventDefault(); if (mode === 'fight') doThrow(); } });
 addEventListener('mouseup', e => { if (e.button === 0) M.l = false; if (e.button === 2) M.r = false; });
 addEventListener('contextmenu', e => e.preventDefault());
@@ -1917,7 +2207,82 @@ $('bRetry').addEventListener('click', retry);
 $('upClose').addEventListener('click', closeUp);
 $('pRes').addEventListener('click', () => { show('pause', false); mode = 'fight'; lock(); });
 $('pUp').addEventListener('click', () => { show('pause', false); mode = 'fight'; openUp(false); });
-const toMenu = () => { ['pause', 'end', 'dlg', 'up', 'dead', 'choice'].forEach(i => show(i, false)); mode = 'menu'; $('bCont').disabled = !load(); show('menu', true); };
+const toMenu = () => { stopVoice(); devSession = false; devGod = false; $('devGod').textContent = 'Бессмертие: выкл.'; show('devPanel', false); ['pause', 'end', 'dlg', 'up', 'dead', 'choice'].forEach(i => show(i, false)); mode = 'menu'; $('bCont').disabled = !load(); show('menu', true); };
+function openDev() {
+  if (!['menu', 'fight', 'pause'].includes(mode)) return;
+  devFrom = mode;
+  if (mode !== 'fight') show(mode, false);
+  mode = 'dev';
+  stopVoice();
+  for (const key in K) K[key] = false;
+  M.l = M.r = false;
+  show('devPanel', true);
+}
+function closeDev() {
+  show('devPanel', false);
+  mode = devFrom;
+  if (mode === 'fight') lock(); else show(mode, true);
+}
+function jumpToCourier() {
+  audio();
+  devSession = true;
+  stopVoice();
+  show('devPanel', false);
+  newGame(1);
+  show('title', false);
+  S.step = steps().findIndex(step => step.t === 'boss' && step.id === 'courier');
+  const room = LV.stepRoom[S.step];
+  P.x = room.cx;
+  P.y = room.cy + 150;
+  comp.x = P.x - 40;
+  comp.y = P.y;
+  camYaw = -Math.PI / 2;
+  mode = 'fight';
+  startEnc(room, null, 'courier', toMenu);
+  syncCourierTrack();
+  lock();
+}
+$('devBoss').addEventListener('click', jumpToCourier);
+$('devBack').addEventListener('click', closeDev);
+$('devExit').addEventListener('click', toMenu);
+$('devGod').addEventListener('click', () => {
+  if (!devSession) return;
+  devGod = !devGod;
+  $('devGod').textContent = 'Бессмертие: ' + (devGod ? 'вкл.' : 'выкл.');
+});
+$('devHeal').addEventListener('click', () => { if (devSession) P.hp = maxHp(); });
+$('devPhase').addEventListener('click', () => {
+  const boss = fs?.boss;
+  if (!devSession || !boss || boss.ph >= boss.d.phases.length - 1) return;
+  boss.hp = Math.min(boss.hp, boss.maxhp * (1 - (boss.ph + 1) / boss.d.phases.length) - .01);
+});
+$('devWeapons').addEventListener('click', () => {
+  if (!devSession) return;
+  for (const weapon of Object.keys(WP)) {
+    S.wl[weapon] = 5;
+    WP[weapon].skills.forEach(skill => { S.sk[skill.id] = 1; });
+  }
+});
+function setCourierTrack(url) {
+  if (courierTrack) courierTrack.pause();
+  const track = new Audio(url);
+  courierTrack = track;
+  track.loop = true;
+  courierPlaying = false;
+  track.addEventListener('error', () => {
+    if (courierTrack !== track) return;
+    $('devStatus').textContent = 'Трек недоступен. Выбери MP3 в панели.';
+    courierTrack = null;
+  }, { once: true });
+}
+$('devTrack').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (courierTrackURL) URL.revokeObjectURL(courierTrackURL);
+  courierTrackURL = URL.createObjectURL(file);
+  setCourierTrack(courierTrackURL);
+  $('devStatus').textContent = 'Выбран трек: ' + file.name;
+});
 $('pMenu').addEventListener('click', toMenu);
 $('bEnd').addEventListener('click', toMenu);
 $('cA').addEventListener('click', () => ending(true));
@@ -1935,12 +2300,32 @@ const HELP = [['Комбо', 'Три лёгких удара подряд — т
   ['Стиль', 'Рейтинг D–SSS растёт от разнообразия и даёт до +36% опыта.'], ['Секреты', 'В каждой главе: тайная комната за завалом у портала и два тайника ✨ в углах боевых комнат.'], ['Геймпад', 'Левый стик — ход, правый — камера, X/Y — удары, A — перекат, B — действие, LB — блок, RB — руна, LT — ад-либ, RT — бросок, крестовина — оружие.']];
 $('stage').insertAdjacentHTML('beforeend', '<div id="help" class="ov" style="background:rgba(5,6,10,.96);z-index:9;padding:26px 60px;justify-content:flex-start"><h2 style="letter-spacing:6px;margin-bottom:14px">МЕХАНИКИ</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;overflow:auto;flex:1;width:100%">' + HELP.map(q => '<div style="background:#131722;border:1px solid #232938;border-left:4px solid #ff3b3b;padding:10px 14px"><b style="font-size:15px;color:#ffd23b">' + q[0] + '</b><div style="font-size:13px;color:#b9c2d4;line-height:1.45;margin-top:3px">' + q[1] + '</div></div>').join('') + '</div><button id="helpX" style="margin-top:14px">Закрыть</button></div>');
 $('helpX').addEventListener('click', () => show('help', false));
-$('pause').insertAdjacentHTML('beforeend', '<div style="margin-top:16px;display:grid;grid-template-columns:auto 220px;gap:10px 16px;align-items:center;font-size:14px;color:#b9c2d4"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто: держит 60 FPS</option><option value="mid">Средняя: тени без свечения</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><div class="row"><button id="pHelp">Механики</button><button id="pBinds">Управление</button><button id="pFull">Полный экран</button></div>');
+$('settings').insertAdjacentHTML('beforeend', '<div id="settingsGrid"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><label for="oVoice">Озвучка</label><input id="oVoice" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто: держит 60 FPS</option><option value="mid">Средняя: тени без свечения</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><div class="row"><button id="pHelp">Механики</button><button id="pBinds">Управление</button><button id="pFull">Полный экран</button><button id="settingsBack">Назад</button></div>');
 $('menu').querySelector('.keys').insertAdjacentHTML('beforebegin', '<div class="row"><button id="mHelp" style="padding:8px 18px;font-size:13px">Механики и геймпад</button><button id="mBinds" style="padding:8px 18px;font-size:13px">Управление</button></div>');
 const applyQ = () => { qual = OPT.q === 'lo' ? 0 : OPT.q === 'mid' ? 1 : 2; DYN = 1; if (R3) { setPR(); SUN.castShadow = qual > 0; } };
-$('oSens').value = OPT.sens; $('oVol').value = OPT.vol; $('oQ').value = OPT.q; applyQ();
+let settingsFrom = 'menu';
+function openSettings() {
+  settingsFrom = mode;
+  $('oD').disabled = settingsFrom === 'menu';
+  $('oD').value = S?.diff ?? 1;
+  show(settingsFrom, false);
+  mode = 'settings';
+  show('settings', true);
+}
+function closeSettings() {
+  const overlay = ['help', 'binds'].find(id => $(id).classList.contains('on'));
+  if (overlay) { show(overlay, false); return; }
+  show('settings', false);
+  mode = settingsFrom;
+  show(settingsFrom, true);
+}
+$('bSettings').addEventListener('click', openSettings);
+$('pSettings').addEventListener('click', openSettings);
+$('settingsBack').addEventListener('click', closeSettings);
+$('oSens').value = OPT.sens; $('oVol').value = OPT.vol; $('oQ').value = OPT.q; $('oVoice').value = OPT.voice; applyQ();
 $('oSens').addEventListener('input', e => { OPT.sens = +e.target.value; saveOpt(); });
-$('oVol').addEventListener('input', e => { OPT.vol = +e.target.value; if (MG) MG.gain.value = .5 * OPT.vol; saveOpt(); });
+$('oVol').addEventListener('input', e => { OPT.vol = +e.target.value; if (!OPT.vol) stopVoice(); if (MG) MG.gain.value = .5 * OPT.vol; saveOpt(); });
+$('oVoice').addEventListener('input', e => { OPT.voice = +e.target.value; if (!OPT.voice) stopVoice(); saveOpt(); });
 $('oQ').addEventListener('change', e => { OPT.q = e.target.value; applyQ(); saveOpt(); });
 $('oD').addEventListener('change', e => { if (S) { S.diff = +e.target.value; save(); } });
 $('pHelp').addEventListener('click', () => show('help', true));
@@ -1970,7 +2355,7 @@ function autoBuy(shop) {
 }
 
 /* ================= ЦИКЛ ================= */
-let last = 0, typeAcc = 0;
+let last = 0;
 function frame(ts) {
   if (window.__manual) { last = ts; requestAnimationFrame(frame); return; }
   const raw = Math.min(.033, (ts - last) / 1000 || 0); last = ts;
@@ -1985,7 +2370,8 @@ function pad(dt) {
   if (bt0.some(Boolean) || dz(ax[0]) || dz(ax[1])) audio();
   const press = c => dispatchEvent(new KeyboardEvent('keydown', { code: c }));
   if (mode === 'fight') { M.l = bt0[2] || (padKeys.l ? false : M.l); padKeys.l = bt0[2] ? 1 : 0; if (bt0[3]) { M.r = true; padKeys.r = 1; } else if (padKeys.r) { M.r = false; padKeys.r = 0; } }
-  if (dn(0)) press(KM.dodge); if (dn(1)) press(KM.interact); if (dn(5)) press(KM.rune); if (dn(6)) press(KM.adlib); if (dn(7)) press(KM.thr); if (dn(10) || dn(11)) press(KM.rage);
+  if (mode === 'guide' && dn(0)) beginTomskPractice();
+  else if (dn(0)) press(KM.dodge); if (dn(1)) press(KM.interact); if (dn(5)) press(KM.rune); if (dn(6)) press(KM.adlib); if (dn(7)) press(KM.thr); if (dn(10) || dn(11)) press(KM.rage);
   if (dn(14)) press(KM.w1); if (dn(12)) press(KM.w2); if (dn(15)) press(KM.w3); if (dn(8)) press(KM.menu); if (dn(9)) press('Escape');
   padPrev = bt0;
 }
@@ -2002,15 +2388,40 @@ function logic(raw) {
     if (bt > 0) { bt -= raw; dt *= .3; }
     if (dt > 0) update(dt);
   } else if (mode === 'dlg') {
-    if (dch < dfull.length) { dch = Math.min(dfull.length, dch + raw * 75); $('dtext').textContent = dfull.slice(0, Math.floor(dch)); typeAcc += raw; if (typeAcc > .05) { typeAcc = 0; sfx.type(); } }
+    if (dialogHold !== null) {
+      const progress = clamp((performance.now() - dialogHold) / (DIALOG_SKIP_SECONDS * 1000), 0, 1);
+      $('dialogSkipFill').style.strokeDashoffset = 100 * (1 - progress);
+      if (progress === 1) { endDlg(); return; }
+    }
+    if (dch < dfull.length) {
+      const before = Math.floor(dch);
+      dch = Math.min(dfull.length, dch + raw * 75);
+      const after = Math.floor(dch);
+      if (after > before) {
+        $('dtext').textContent = dfull.slice(0, after);
+        dialogueBlip(dfull.slice(before, after));
+      }
+    }
     updFx(raw);
   } else if (mode === 'title') {
     titleT -= raw; if (titleT <= 0) { show('title', false); const cb = titleCb; titleCb = null; cb(); }
   }
   if (toastT > 0) { toastT -= raw; if (toastT <= 0) $('toast').style.display = 'none'; }
 }
-requestAnimationFrame(frame);
-{ const bq = $('boot'); if (bq) bq.style.display = 'none'; }
+requestAnimationFrame(ts => {
+  const boot = $('boot');
+  try {
+    frame(ts);
+    boot.style.display = 'none';
+  } catch (error) {
+    console.error('Game startup failed:', error);
+    const status = boot.querySelector('span');
+    status.textContent = /webgl/i.test(String(error))
+      ? 'WebGL недоступен. Открой игру в Chrome или Edge с включённым аппаратным ускорением.'
+      : 'Ошибка запуска: ' + error.message;
+    status.style.cssText = 'font: 16px Segoe UI, sans-serif; letter-spacing: normal; margin-top: 14px; max-width: 75%; text-align: center; color: #e8ecf4';
+  }
+});
 try { document.fonts.load('16px "Russo One"'); } catch (e) {}
 
 // для отладки из консоли: GOC.skip() — пропустить шаг, GOC.goto(глава) — прыгнуть к главе (0..8)
