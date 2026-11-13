@@ -95,7 +95,11 @@ const LORE = [
 ];
 
 const LEVELS = [
-  { path: 'EENE', side: [{ at: 1, d: 'S', npc: 'lil' }, { at: 1, d: 'N', lore: 0, chest: { item: 'tape' } }, { at: 2, d: 'S', lore: 1, guard: [[['bot', 4], ['hater', 1, 'E']]], chest: { hp: 10 } }] },
+  { path: 'EENE', side: [
+    { at: 1, d: 'S', npc: 'lil' },
+    { at: 1, d: 'N', lore: 0, chest: { item: 'tape', xp: 300 } },
+    { at: 2, d: 'S', lore: 1, guard: [[['bot', 4], ['hater', 1, 'E']]], chest: { hp: 20, tapes: 1 } },
+  ] },
   { path: 'ESE', side: [{ at: 1, d: 'N', npc: 'ded' }, { at: 0, d: 'N', npc: 'reverb' }, { at: 0, d: 'S', lore: 0, chest: { item: 'flash' } }, { at: 1, d: 'E', q: 'ded', lore: 1, guard: [[['clipper', 3]], [['clipper', 2], ['bot', 3, 'E']]], chest: { tapes: 1 } }] },
   { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'hook' }, { at: 1, d: 'E', npc: 'paint' }, { at: 2, d: 'N', q: 'paint', lore: 0, guard: [[['clipper', 3], ['hater', 2]], [['troll', 1, 'E'], ['hater', 2]]], chest: { hp: 10 } }, { at: 2, d: 'W', lore: 1, chest: { item: 'pods' } }] },
   { path: 'EESE', side: [{ at: 1, d: 'N', npc: 'sad' }, { at: 1, d: 'S', npc: 'kish', lore: 0, chest: { item: 'grillz' } }, { at: 2, d: 'N', lore: 1, guard: [[['hater', 4], ['troll', 1]], [['troll', 1, 'E'], ['ghost', 2]]], chest: { hp: 10 } }] },

@@ -296,6 +296,13 @@ function loadLevel() {
     [LV.main[1], LV.main[2]].forEach((r, i) => { if (!r) return; const c = (S.ch + i * 3) % 4; ents.push({ k: 'stash', id: 'c' + S.ch + 'st' + i, i, x: c % 2 ? r.x + r.w - 62 : r.x + 62, y: c < 2 ? r.y + 62 : r.y + r.h - 62 }); });
   }
   for (const r of LV.rooms) {
+    if (tomskArch(r)) {
+      for (const [dx, dy] of [[-355, 145], [5, -240], [340, 185]]) {
+        const barrel = { k: 'brk', x: r.cx + dx, y: r.cy + dy, r: 20, ex: true, archBarrel: true };
+        ents.push(barrel);
+        obs.push(barrel);
+      }
+    }
     if (r.kind === 'boss') for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) obs.push({ x: r.cx + dx * (r.w / 2 - 80), y: r.cy + dy * (r.h / 2 - 80), r: 48 });
     if (r.kind === 'fight' || r.kind === 'boss') for (let i = 0, t = 0; i < 4 && t < 60; t++) {
       const x = rnd(r.x + 110, r.x + r.w - 110), y = rnd(r.y + 110, r.y + r.h - 110);
@@ -345,7 +352,8 @@ function breakIt(o) {
   if (!o.ex) { S.xp += 8; float(o.x, o.y - 30, '+8 ▶', '#7dff7d'); if (Math.random() < .4) orbs.push({ x: o.x, y: o.y, l: 12 }); return; }
   ring(o.x, o.y, 170, '#ff5a2a'); sfx.boom(); shake = Math.max(shake, 14); flash = Math.max(flash, .12);
   timers.push({ t: .04, f: () => {
-    for (const q of ens) if (!q.dead && dist(q, o) < 170 + q.r) dmgE(q, 70 * (1 + S.ch * .2), { kb: 420, stun: .7, heavy: true });
+    const damage = o.archBarrel ? 95 : 70 * (1 + S.ch * .2);
+    for (const q of ens) if (!q.dead && dist(q, o) < 170 + q.r) dmgE(q, damage, { kb: 420, stun: .7, heavy: true });
     if (dist(P, o) < 150) hurtP(16, null, true);
     for (const q of ents) if (q.k === 'brk' && !q.dead && dist(q, o) < 180) breakIt(q);
   } });
@@ -374,6 +382,7 @@ function startEnc(room, waves, bossId, cb) {
     fs.surv = 60;
     fs.spT = 6;
     toast('Продержись минуту · укрывайся от залпов за бетонными блоками', 5);
+    tip('archBarrel', 'Подведи ботов к красной бочке и взорви её броском биты [' + KN('thr') + ']. Вблизи взрыв заденет и тебя.');
   }
   if (fs.training) openTomskGuide();
   else if (bossId) spawnBoss(bossId); else spawnWave();
@@ -1517,6 +1526,14 @@ function drawNav() {
   X.textAlign = 'left'; let y = 34;
   if (ob) { X.font = 'bold 15px "Russo One","Segoe UI"'; X.fillStyle = '#ffd23b'; X.fillText('◆ ' + ob, 30, y); y += 22; }
   X.font = '13px "Russo One","Segoe UI"';
+  if (S.ch === 0 && !fs && S.step >= LV.main[1].step) {
+    const rooms = LV.sides.filter(r => r.side.chest && !S.done[r.side.id + 'c']);
+    if (rooms.length) {
+      X.fillStyle = '#ffd23b';
+      X.fillText('◇ Тайники Томска: ' + rooms.length + ' · ищи золотые точки на миникарте', 30, y);
+      y += 19;
+    }
+  }
   for (const o of ents) if (o.k === 'npc' && S.q[o.id] && S.q[o.id].st === 1) {
     const n = NPCS[o.id], q = S.q[o.id], rd = qReady(o.id);
     X.fillStyle = rd ? '#7dff7d' : '#c3ccdb'; X.fillText('◇ ' + (rd ? 'Вернись к ' + n.n : n.q.txt + (n.q.type === 'kill' ? '  (' + q.n + '/' + n.q.n + ')' : '')), 30, y); y += 19;
