@@ -11,7 +11,7 @@ namespace Back2U
     static class App
     {
         public const string Name = "GOD OF BACK2U";
-        public const string Version = "1.0";
+        public const string Version = "1.1";
         public const string ExeName = "GOD OF BACK2U.exe";
         public const string Marker = "back2u.installed";
         public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\GOD OF BACK2U";

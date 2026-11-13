@@ -21,7 +21,9 @@ foreach ($d in 'js', 'models', 'fonts', 'assets') { Copy-Item (Join-Path $root $
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/platform:anycpu', '/target:winexe',
   "/win32icon:$(Join-Path $root 'assets\icon.ico')", "/win32manifest:$(Join-Path $src 'app.manifest')",
   '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll')
-& $csc @common "/out:$(Join-Path $stage 'GOD OF BACK2U.exe')" (Join-Path $src 'Common.cs') (Join-Path $src 'Launcher.cs')
+& $csc @common "/out:$(Join-Path $stage 'GOD OF BACK2U.exe')" `
+  "/resource:$(Join-Path $root 'assets\keyart.jpg'),keyart.jpg" "/resource:$(Join-Path $root 'fonts\RussoOne-Regular.ttf'),font.ttf" "/resource:$(Join-Path $root 'assets\icon.png'),icon.png" `
+  (Join-Path $src 'Common.cs') (Join-Path $src 'Launcher.cs')
 if ($LASTEXITCODE -ne 0) { throw 'launcher build failed' }
 
 # 3. pack

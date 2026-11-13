@@ -140,7 +140,9 @@ const lock = () => { try { if (document.pointerLockElement !== C && C.requestPoi
 function inputDir() { const ix = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0), iy = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), c = Math.cos(camYaw), s = Math.sin(camYaw); return [c * iy - s * ix, s * iy + c * ix]; }
 function pushOut(o, r) { for (const b of obs) { const dx = o.x - b.x, dy = o.y - b.y, m = b.r + r, d2 = dx * dx + dy * dy; if (d2 < m * m && d2 > .01) { const d = Math.sqrt(d2); o.x = b.x + dx / d * m; o.y = b.y + dy / d * m; } } }
 
-let OPT = { sens: 1, vol: 1, q: 'auto' }; try { Object.assign(OPT, JSON.parse(localStorage.getItem('goc_opts') || '{}')); } catch (e) {}
+let OPT = { sens: 1, vol: 1, q: 'auto', fps: false }; try { Object.assign(OPT, JSON.parse(localStorage.getItem('goc_opts') || '{}')); } catch (e) {}
+{ const qs = new URLSearchParams(location.search); if (['auto', 'lo', 'mid', 'hi'].includes(qs.get('q'))) OPT.q = qs.get('q'); if (qs.has('fps')) OPT.fps = qs.get('fps') === '1'; }
+let DYN = 1, upT = 0, fpsN = 60, shF = 0, VIG = null;
 const saveOpt = () => { try { localStorage.setItem('goc_opts', JSON.stringify(OPT)); } catch (e) {} };
 let tipQ = [], tipT = 0, waves = [], mdlTot = 0, mdlDone = 0, padPrev = [], padKeys = {}, stepT = 0;
 function tip(id, text) { if (!S || !S.tips || S.tips[id]) return; S.tips[id] = 1; tipQ.push(text); }
@@ -986,13 +988,13 @@ function aimPoint() {
   _nd.set(M.x / W * 2 - 1, -(M.y / H * 2 - 1)); _ray.setFromCamera(_nd, CAM);
   return _ray.ray.intersectPlane(_pl, _hit) ? { x: _hit.x, y: _hit.z } : { x: P.x + Math.cos(P.aim), y: P.y + Math.sin(P.aim) };
 }
-function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual]); if (R3 && PPC) { const pr = R3.getPixelRatio(); PPC.setPixelRatio(pr); PPC.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
+function setPR() { if (R3) R3.setPixelRatio(Math.min(1.5, Math.max(.8, Math.min(innerWidth / W, innerHeight / H) * (window.devicePixelRatio || 1))) * [.6, .8, 1][qual] * DYN); if (R3 && PPC) { const pr = R3.getPixelRatio(); PPC.setPixelRatio(pr); PPC.setSize(W, H); if (FXA) FXA.uniforms.resolution.value.set(1 / (W * pr), 1 / (H * pr)); } }
 addEventListener('resize', setPR);
 
 function init3d() {
-  R3 = new T3.WebGLRenderer({ canvas: $('gl'), antialias: true }); R3.setSize(W, H, false); setPR();
+  R3 = new T3.WebGLRenderer({ canvas: $('gl'), antialias: OPT.q === 'mid', powerPreference: 'high-performance' }); R3.setSize(W, H, false); setPR();
   R3.outputEncoding = T3.sRGBEncoding; R3.toneMapping = T3.ACESFilmicToneMapping; R3.toneMappingExposure = 1.25;
-  R3.info.autoReset = false; R3.shadowMap.enabled = true; R3.shadowMap.type = T3.PCFSoftShadowMap;
+  R3.info.autoReset = false; R3.shadowMap.enabled = true; R3.shadowMap.type = T3.PCFShadowMap; R3.shadowMap.autoUpdate = false;
   SC = new T3.Scene(); CAM = new T3.PerspectiveCamera(56, W / H, 8, 5000);
   HEMI = new T3.HemisphereLight(0xdde6ff, 0x1a1c2a, .6); SC.add(HEMI);
   SUN = new T3.DirectionalLight(0xffffff, .75); SUN.castShadow = true; SUN.shadow.mapSize.set(1024, 1024);
@@ -1601,7 +1603,17 @@ function render() {
   if (cine) { const b = cine.e, ca = camYaw + Math.PI + .5 - cine.t * .28, cd = 330 - cine.t * 45; CAM.position.set(b.x + Math.cos(ca) * cd, 70 + b.r * 1.2, b.y + Math.sin(ca) * cd); CAM.lookAt(b.x, b.r * 2.3, b.y); if (CAM.fov !== 44) { CAM.fov = 44; CAM.updateProjectionMatrix(); } }
   CAM.updateMatrixWorld();
   if (FL && FL.intensity > .01) FL.intensity *= Math.pow(.0008, fdt); else if (FL) FL.intensity = 0;
-  if (fdt > 0 && fdt < .2 && !document.hidden) { fpsA += (1 / fdt - fpsA) * .05; qT += fdt; if (qT > 3) { qT = 0; if (OPT.q === 'auto' && fpsA < 40 && qual > 0) { qual--; setPR(); SUN.castShadow = qual > 0; } } }
+  if (fdt > 0 && fdt < .2 && !document.hidden) {
+    fpsA += (1 / fdt - fpsA) * .05; fpsN += (1 / fdt - fpsN) * .1; qT += fdt;
+    if (qT > 1) { qT = 0;
+      if (OPT.q === 'auto') {
+        if (fpsA < 54 && DYN > .6) { DYN = Math.max(.6, +(DYN - .1).toFixed(2)); setPR(); upT = 0; }
+        else if (fpsA < 40 && qual > 0) { qual--; setPR(); SUN.castShadow = qual > 0; upT = 0; }
+        else if (fpsA > 58.5 && DYN < 1) { if (++upT >= 4) { DYN = Math.min(1, +(DYN + .1).toFixed(2)); setPR(); upT = 0; } } else upT = 0;
+      }
+    }
+  }
+  R3.shadowMap.needsUpdate = qual > 0 && (++shF % 2 === 0 || !!cine);
   SUN.position.set(P.x + 320, 760, P.y + 260); SUN.target.position.set(P.x, 0, P.y); SUN.target.updateMatrixWorld();
   for (const k in pools) pools[k].i = 0;
   for (const p of spinners) { const u = p.userData, a = u.a + now * u.sp; p.position.set(LV.w / 2 + Math.cos(a) * u.rr, u.h + Math.sin(now + u.a) * 10, LV.h / 2 + Math.sin(a) * u.rr * .6); p.rotation.set(now * .5 + u.a, now * .3, 0); }
@@ -1757,7 +1769,10 @@ function render() {
     if (st === 0 || st === 1) { const rd = st === 1 && qReady(o.id); X.font = 'bold 26px "Russo One","Segoe UI"'; X.strokeText(st === 0 ? '!' : '?', q.x, q.y - 16); X.fillStyle = st === 0 || rd ? '#ffd23b' : '#8d97aa'; X.fillText(st === 0 ? '!' : '?', q.x, q.y - 16); }
   }
   if (false) { X.fillStyle = 'rgba(255,255,255,.6)'; for (let i = 0; i < 70; i++) { const x = (i * 137.5 + now * 30 * (1 + i % 3)) % W, y = (i * 71.3 + now * 70 * (1 + i % 4) * .5) % H; X.fillRect(x, y, 2, 2); } }
-  const g = X.createRadialGradient(W / 2, H / 2, H * .5, W / 2, H / 2, H * .98); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.5)'); X.fillStyle = g; X.fillRect(0, 0, W, H);
+  if (!VIG) { VIG = document.createElement('canvas'); VIG.width = W; VIG.height = H; const vx = VIG.getContext('2d'), g = vx.createRadialGradient(W / 2, H / 2, H * .5, W / 2, H / 2, H * .98); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.5)'); vx.fillStyle = g; vx.fillRect(0, 0, W, H); }
+  X.drawImage(VIG, 0, 0);
+  if (OPT.fps) { X.textAlign = 'right'; X.font = '13px ' + FONT; const f = Math.round(fpsN); X.fillStyle = 'rgba(0,0,0,.55)'; X.fillRect(W - 168, H - 30, 150, 20); X.fillStyle = f >= 55 ? '#7dff7d' : f >= 40 ? '#ffd23b' : '#ff5a3c';
+    X.fillText('FPS ' + f + '  ·  ' + ['НИЗК', 'СРЕД', 'ВЫС'][qual] + ' ' + Math.round(DYN * 100) + '%', W - 24, H - 15); X.textAlign = 'left'; }
   if (P.hp / maxHp() < .3) { X.fillStyle = `rgba(200,0,0,${.12 + .06 * Math.sin(now * 6)})`; X.fillRect(0, 0, W, H); }
   if (flash > 0) { X.fillStyle = `rgba(255,255,255,${clamp(flash, 0, .5)})`; X.fillRect(0, 0, W, H); }
   if (bt > 0) { const gg = X.createRadialGradient(W / 2, H / 2, H * .25, W / 2, H / 2, H * .9); gg.addColorStop(0, 'rgba(90,170,255,0)'); gg.addColorStop(1, `rgba(90,170,255,${Math.min(.45, bt * .6)})`); X.fillStyle = gg; X.fillRect(0, 0, W, H); }
@@ -1842,6 +1857,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   K[e.code] = true; audio();
   if (e.code === 'KeyM') { muted = !muted; toast(muted ? 'Звук выключен' : 'Звук включён', 1.2); }
+  if (e.code === 'F3') { e.preventDefault(); OPT.fps = !OPT.fps; saveOpt(); }
   if (mode === 'dlg') { if (e.code === 'Space' || e.code === 'Enter') advDlg(); else if (e.code === 'Escape') endDlg(); return; }
   if (mode === 'up') { if (e.code === 'Tab' || e.code === 'Escape') closeUp(); return; }
   if (mode === 'pause') { if (e.code === 'Escape') { show('pause', false); show('help', false); mode = 'fight'; } return; }
@@ -1899,9 +1915,9 @@ const HELP = [['Комбо', 'Три лёгких удара подряд — т
   ['Стиль', 'Рейтинг D–SSS растёт от разнообразия и даёт до +36% опыта.'], ['Секреты', 'В каждой главе: тайная комната за завалом у портала и два тайника ✨ в углах боевых комнат.'], ['Геймпад', 'Левый стик — ход, правый — камера, X/Y — удары, A — перекат, B — действие, LB — блок, RB — руна, LT — ад-либ, RT — бросок, крестовина — оружие.']];
 $('stage').insertAdjacentHTML('beforeend', '<div id="help" class="ov" style="background:rgba(5,6,10,.96);z-index:9;padding:26px 60px;justify-content:flex-start"><h2 style="letter-spacing:6px;margin-bottom:14px">МЕХАНИКИ</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;overflow:auto;flex:1;width:100%">' + HELP.map(q => '<div style="background:#131722;border:1px solid #232938;border-left:4px solid #ff3b3b;padding:10px 14px"><b style="font-size:15px;color:#ffd23b">' + q[0] + '</b><div style="font-size:13px;color:#b9c2d4;line-height:1.45;margin-top:3px">' + q[1] + '</div></div>').join('') + '</div><button id="helpX" style="margin-top:14px">Закрыть</button></div>');
 $('helpX').addEventListener('click', () => show('help', false));
-$('pause').insertAdjacentHTML('beforeend', '<div style="margin-top:16px;display:grid;grid-template-columns:auto 220px;gap:10px 16px;align-items:center;font-size:14px;color:#b9c2d4"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><button id="pHelp">Механики</button>');
+$('pause').insertAdjacentHTML('beforeend', '<div style="margin-top:16px;display:grid;grid-template-columns:auto 220px;gap:10px 16px;align-items:center;font-size:14px;color:#b9c2d4"><span>Чувствительность мыши</span><input id="oSens" type="range" min="0.3" max="2.5" step="0.1"><span>Громкость</span><input id="oVol" type="range" min="0" max="1" step="0.05"><span>Графика</span><select id="oQ" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="auto">Авто: держит 60 FPS</option><option value="mid">Средняя: тени без свечения</option><option value="hi">Высокая: тени и свечение</option><option value="lo">Низкая: быстрее</option></select><span>Сложность</span><select id="oD" style="padding:6px;background:#1a1d27;color:#fff;border:1px solid #3a4052"><option value="0">Изи</option><option value="1">Норм</option><option value="2">Андеграунд</option></select></div><button id="pHelp">Механики</button>');
 $('menu').querySelector('.keys').insertAdjacentHTML('beforebegin', '<div class="row"><button id="mHelp" style="padding:8px 18px;font-size:13px">Механики и геймпад</button></div>');
-const applyQ = () => { qual = OPT.q === 'lo' ? 0 : 2; if (R3) { setPR(); SUN.castShadow = qual > 0; } };
+const applyQ = () => { qual = OPT.q === 'lo' ? 0 : OPT.q === 'mid' ? 1 : 2; DYN = 1; if (R3) { setPR(); SUN.castShadow = qual > 0; } };
 $('oSens').value = OPT.sens; $('oVol').value = OPT.vol; $('oQ').value = OPT.q; applyQ();
 $('oSens').addEventListener('input', e => { OPT.sens = +e.target.value; saveOpt(); });
 $('oVol').addEventListener('input', e => { OPT.vol = +e.target.value; if (MG) MG.gain.value = .5 * OPT.vol; saveOpt(); });
