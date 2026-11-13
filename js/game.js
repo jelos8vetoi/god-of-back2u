@@ -371,6 +371,7 @@ function startEnc(room, waves, bossId, cb) {
   if (tomskOpening(room)) fs.training = true;
   if (tomskArch(room)) {
     fs.arch = true;
+    if (S.diff === 0) fs.waves = fs.waves.slice(0, 1);
     toast('Держи ' + KN('sprint') + ', чтобы перебежать за укрытие', 5);
   }
   if (fs.training) openTomskGuide();
@@ -600,12 +601,20 @@ function edgePos() {
 }
 function mkEnemy(type, x, y) {
   const d = EN[type], ng = S.ng || 0, late = Math.max(0, S.ch - 4), sc = (1 + S.ch * .5 + late * .5) * (1 + ng * .6);
-  return { type, d, ai: d.ai, x, y, r: d.r, hp: d.hp * sc, maxhp: d.hp * sc, dmg: d.dmg * (1 + S.ch * .3 + late * .18) * (1 + ng * .35), spd: d.spd * rnd(.9, 1.1) * (1 + S.ch * .02) * (fs && fs.mut === 'haste' ? 1.3 : 1), c: d.c,
+  const tomskBot = type === 'bot' && S.ch === 0 && !tomskDrillPending();
+  const hp = (tomskBot ? [d.hp, 88, 108][S.diff] ?? d.hp : d.hp) * sc;
+  return { type, d, ai: d.ai, x, y, r: d.r, hp, maxhp: hp, dmg: d.dmg * (1 + S.ch * .3 + late * .18) * (1 + ng * .35), spd: d.spd * rnd(.9, 1.1) * (1 + S.ch * .02) * (fs && fs.mut === 'haste' ? 1.3 : 1), c: d.c,
     state: 'idle', t: 0, cdT: rnd(.6, 2), aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: .7, fl: 0, xp: Math.round(d.xp * .42 * (1 + S.ch * .15)), rng: d.rng || 50 };
 }
 function spawnWave() {
   if (fs.arch) {
     const { cx, cy } = fs.room;
+    if (fs.i === 1) {
+      ens.push(mkEnemy('bot', cx - 430, cy - 245), mkEnemy('bot', cx + 230, cy + 285),
+        mkEnemy('bot', cx - 300, cy + 255), mkEnemy('hater', cx + 390, cy - 245));
+      toast('Подкрепление с двух сторон', 3);
+      return;
+    }
     ens.push(mkEnemy('bot', cx - 55, cy - 175), mkEnemy('bot', cx + 85, cy + 55));
     const hater = mkEnemy('hater', cx + 375, cy - 20);
     hater.guardPost = true;
