@@ -280,6 +280,10 @@ function makeDeco() {
 }
 function loadLevel() {
   LV = buildLevel(S.ch); ents = []; fs = null; ens = []; prj = []; haz = []; orbs = []; timers = []; bolts = []; rings = []; objRoom = null;
+  if (S.ch === 0) {
+    const r = LV.main[0];
+    ents.push({ k: 'frontDoor', x: r.x + r.w - 14, y: r.cy, open: S.step > LV.main[1].step });
+  }
   if (S.ch > 0) ents.push({ k: 'seva', x: LV.main[0].cx - 200, y: LV.main[0].cy - 160 });
   ents.push({ k: 'seva', x: LV.exit.cx - 170, y: LV.exit.cy - 130 }, { k: 'portal', x: LV.exit.cx + 90, y: LV.exit.cy + 30 });
   for (const r of LV.sides) {
@@ -453,6 +457,10 @@ function scan() {
     } else if (d < 95) {
       if (o.k === 'chest') { if (S.done[o.id] || (o.room.side.guard && !S.done[o.room.side.id])) continue; if (o.lock && !S.done[o.lock]) { prompt = '🔒  Сбей 3 мишени 🎯 на стене: бросок биты [' + KN('thr') + '] или диски'; continue; } prompt = '[' + KN('interact') + ']  Открыть сундук'; }
       else if (o.k === 'stash') { if (S.done[o.id] || d > 70) continue; prompt = '[' + KN('interact') + ']  ✨ Тайник'; }
+      else if (o.k === 'frontDoor') {
+        if (o.open) continue;
+        prompt = '[' + KN('interact') + ']  Открыть дверь во двор';
+      }
       else if (o.k === 'power') {
         if (S.done[o.id] || !S.done[o.room.side.id]) continue;
         prompt = '[' + KN('interact') + ']  Включить фонари у арки';
@@ -514,6 +522,10 @@ function doInteract() {
   const o = target.o;
   if (o.k === 'chest') { S.done[o.id] = 1; reward(o.loot, 'Сундук'); }
   else if (o.k === 'stash') { S.done[o.id] = 1; reward({ xp: 80 + S.ch * 25, hp: o.i ? 0 : 5 }, '✨ Тайник'); secretCheck(); save(); }
+  else if (o.k === 'frontDoor') {
+    o.open = true;
+    sfx.block();
+  }
   else if (o.k === 'power') {
     S.done[o.id] = 1;
     toast('Фонари у арки включены · свет покажет, откуда идут боты', 5);
@@ -919,6 +931,9 @@ function updPlayer(dt) {
   }
   if (fs && !fs.done) { P.x = RX(P.x, P.r); P.y = RY(P.y, P.r); }
   else if (!okPos(P.x, P.y, P.r)) { if (okPos(P.x, oy, P.r)) P.y = oy; else if (okPos(ox, P.y, P.r)) P.x = ox; else { P.x = ox; P.y = oy; } }
+  if (S.ch === 0 && ents[0]?.k === 'frontDoor' && !ents[0].open && ox < ents[0].x) {
+    P.x = Math.min(P.x, ents[0].x - P.r - 8);
+  }
   pushOut(P, P.r);
   // кент идёт следом
   let tx = P.x, ty = P.y;
@@ -1403,17 +1418,21 @@ function buildWorld(th) {
   if (S.ch === 0) {
     const r = LV.main[0];
     const vestibule = new T3.Group();
-    const tile = fmat('#928679');
+    const tile = fmat('#51463a');
     pl({ x: r.x + 12, y: r.y + 12, w: r.w - 24, h: r.h - 24 }, tile, .7);
-    for (const dy of [-92, 92]) {
-      vestibule.add(box(28, 128, 24, '#35423e', r.x + r.w - 15, 64, r.cy + dy));
+    for (const dz of [12, r.h - 12]) {
+      vestibule.add(box(r.w - 16, 65, 15, '#39483d', r.cx, 33, r.y + dz));
+      vestibule.add(box(r.w - 16, 57, 15, '#766d59', r.cx, 94, r.y + dz));
     }
-    vestibule.add(box(136, 72, 18, '#66645a', r.cx - 180, 100, r.y + 28));
-    vestibule.add(box(27, 22, 208, '#35423e', r.x + r.w - 15, 129, r.cy));
-    const sign = emo('ВЫХОД', 74, 147);
-    sign.position.x = r.x + r.w - 28;
-    sign.position.z = r.cy;
-    vestibule.add(sign);
+    for (let i = 0; i < 6; i++) {
+      const x = r.cx - 155 + i * 30;
+      vestibule.add(box(28, 39, 17, '#55574c', x, 74, r.y + 24));
+      vestibule.add(box(16, 3, 3, '#242621', x, 83, r.y + 34));
+    }
+    vestibule.add(box(22, 12, 22, '#9f7943', r.cx, 119, r.cy, { emissive: '#eeb053', emissiveIntensity: .65 }));
+    const bulb = new T3.PointLight('#ffbd63', .85, 260, 2);
+    bulb.position.set(r.cx, 111, r.cy);
+    vestibule.add(bulb);
     worldG.add(vestibule);
   }
   // стены: забор-модель, земляной вал или текстурные панели с кромкой
@@ -1506,6 +1525,10 @@ function buildWorld(th) {
       if (mg) { g.add(mg, emo(o.k === 'seva' ? '🔧' : '🎤', 26, 100)); statics.push(mg); }
       else g.add(cyl(13, 17, 36, c, 0, 18, 0), sph(9.5, '#e8c39e', 0, 44, 0), cyl(10, 10.5, 5, '#22242e', 0, 51, 0), box(9, 2, 14, '#22242e', 8, 49, 0), emo(o.k === 'seva' ? '🔧' : '🎤', 26, 80));
       if (o.k === 'seva') { const b = new T3.Group(); b.add(box(44, 26, 28, '#3a2718', 0, 13, 0), box(30, 2, 20, '#49e0ff', 0, 27, 0, { emissive: '#49e0ff', emissiveIntensity: .9 })); b.position.set(o.x, 0, o.y + 50); worldG.add(b); }
+    } else if (o.k === 'frontDoor') {
+      g.add(box(17, 120, 215, '#303a35', 0, 60, 0),
+        box(19, 31, 67, '#505d5c', 0, 91, -24),
+        box(10, 8, 24, '#9c8150', -12, 58, 67));
     } else if (o.k === 'power') g.add(box(58, 76, 28, '#46534e', 0, 38, 0), emo('⚡', 28, 94));
     else if (o.k === 'chest') g.add(box(46, 26, 30, '#7a4a1e', 0, 13, 0), box(48, 8, 32, '#ffd23b', 0, 28, 0, { metalness: .7, roughness: .3, emissive: '#553a00', emissiveIntensity: .7 }), emo(o.loot.hp ? '💛' : o.loot.tapes ? '📀' : '🎁', 24, 58));
     else if (o.k === 'lore') g.add(emo('📼', 36, 30));
@@ -2156,7 +2179,11 @@ function render() {
   if (fs && !fs.done && fs.traps) for (const t of fs.traps) { dRing(t.x, t.y, 95, '#ffb03b', .22); dCirc(t.x, t.y, 14, '#ffb03b', .5); }
   for (const o of ents) {
     if (!o.m) continue;
-    if (o.k === 'chest') o.m.visible = !S.done[o.id];
+    if (o.k === 'frontDoor') {
+      o.m.rotation.y = o.open ? Math.PI / 2 : 0;
+      o.m.position.set(o.x + (o.open ? 103 : 0), 0, o.y - (o.open ? 103 : 0));
+    }
+    else if (o.k === 'chest') o.m.visible = !S.done[o.id];
     else if (o.k === 'tgt' || o.k === 'brk' || o.k === 'swall') o.m.visible = !o.dead;
     else if (o.k === 'stash') { o.m.visible = !S.done[o.id] && dist(o, P) < 420; o.m.children[0].material.opacity = .35 + .35 * Math.sin(now * 5 + o.x); }
     else if (o.k === 'lore') { o.m.visible = !S.done[o.id]; o.m.position.y = Math.sin(now * 3) * 6; }
