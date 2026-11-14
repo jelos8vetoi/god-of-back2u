@@ -186,6 +186,8 @@ let P = null, ens = [], prj = [], haz = [], orbs = [], pts = [], rings = [], bol
 let cam = { x: 0, y: 0 }, shake = 0, hitstop = 0, slowmo = 0, flash = 0;
 let fs = null, comp = { x: 0, y: 0, say: '', sayT: 0 };
 let titleT = 0, titleCb = null, toastT = 0, shownTitle = -1, upShop = false, upPrev = 'fight';
+const TOMSK_INTRO_DURATION = 2.4;
+const introReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const K = {}, M = { x: W / 2, y: H / 2, l: false, r: false };
 let bt = 0, camYaw = -Math.PI / 2, camPit = .36, camD = 270, obs = [], fpsA = 60, qual = 2, qT = 0;
 const lock = () => { try { if (document.pointerLockElement !== C && C.requestPointerLock) { const p = C.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } } catch (e) {} };
@@ -351,7 +353,14 @@ function startChapter() {
   loadLevel(); save(); const ch = CH[S.ch];
   $('tnum').textContent = 'ГЛАВА ' + (S.ch + 1) + ' ИЗ ' + CH.length; $('tname').textContent = ch.name; $('tplace').textContent = ch.place;
   ['dlg', 'choice', 'up'].forEach(i => show(i, false));
-  show('title', true); mode = 'title'; titleT = 3; titleCb = () => { mode = 'fight'; }; sfx.boom();
+  const opening = S.ch === 0 && S.step === 0;
+  $('title').classList.toggle('tomsk-intro', opening);
+  $('title').style.opacity = '';
+  show('title', true);
+  mode = 'title';
+  titleT = opening ? TOMSK_INTRO_DURATION : 3;
+  titleCb = () => { mode = 'fight'; if (opening) pump(); };
+  if (!opening) sfx.boom();
 }
 function nextChapter() { S.ch++; S.step = 0; P.hp = maxHp(); startChapter(); }
 function reward(rw, title) {
@@ -2194,13 +2203,19 @@ function render() {
   for (const light of SC.children) {
     if (light.isDirectionalLight && light !== SUN) light.intensity = .45 + (.025 - .45) * indoorLightMix;
   }
-  if (indoors && mode === 'dlg' && S.step === 0) {
-      const speaker = dq[di]?.split('|')[0];
+  const introShot = indoors && S.step === 0 && (mode === 'title' || mode === 'dlg');
+  if (introShot) {
+      const speaker = mode === 'dlg' ? dq[di]?.split('|')[0] : null;
       const subject = speaker === 'M' ? comp : P;
       const other = speaker === 'M' ? P : comp;
       const angle = Math.atan2(other.y - subject.y, other.x - subject.x);
-      CAM.position.set(subject.x + Math.cos(angle + .55) * 110, 63, subject.y + Math.sin(angle + .55) * 110);
-      CAM.lookAt(subject.x, 49, subject.y);
+      const progress = mode === 'title' && !introReducedMotion.matches
+        ? clamp(1 - titleT / TOMSK_INTRO_DURATION, 0, 1) : 1;
+      const wide = 1 - progress * progress * (3 - 2 * progress);
+      const distance = 110 + 92 * wide, turn = angle + .55 + .6 * wide;
+      CAM.position.set(subject.x + Math.cos(turn) * distance, 63 + 26 * wide, subject.y + Math.sin(turn) * distance);
+      CAM.lookAt(subject.x + (other.x - subject.x) * .5 * wide, 49, subject.y + (other.y - subject.y) * .5 * wide);
+      if (mode === 'title') $('title').style.opacity = clamp(titleT / .7, 0, 1);
     CAM.fov = 65;
     CAM.updateProjectionMatrix();
     CAM.updateMatrixWorld();
@@ -2241,7 +2256,7 @@ function render() {
 
   // Пахан
   const w = S.weapon, wd = WP[w], a = P.atk;
-  PM.position.set(P.x, 0, P.y); PM.rotation.y = indoors && mode === 'dlg' ? -ang(P, comp) : -P.aim;
+  PM.position.set(P.x, 0, P.y); PM.rotation.y = introShot ? -ang(P, comp) : -P.aim;
   if (!PM.userData.mdl && MDL.vanek) {
     const q = inst('vanek', 72, { tint: '#4a4d5a', mix: .5 }); PIN.children.slice(0, 5).forEach(c => { c.visible = false; }); PIN.add(q); PM.userData.mdl = q;
     let hs = null; q.traverse(o => { if (/^handslot.?r$/i.test(o.name)) hs = o; });
@@ -2291,7 +2306,7 @@ function render() {
   if (P.spin > 0) dRing(P.x, P.y, 155, '#49e0ff', .8);
   if (P.rage > 0) dRing(P.x, P.y, 34 + Math.sin(now * 12) * 4, '#ff4a1c', .9);
   { const cg = CM.userData.mdl, cmv = Math.hypot(comp.x - (comp.lx || 0), comp.y - (comp.ly || 0)) > .7; comp.lx = comp.x; comp.ly = comp.y;
-    CM.position.set(comp.x, cg ? 0 : Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = indoors && mode === 'dlg' ? -ang(comp, P) : -P.aim;
+    CM.position.set(comp.x, cg ? 0 : Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = introShot ? -ang(comp, P) : -P.aim;
     if (cg) { if (comp.sayT > 0) play(cg, 'cheer'); else play(cg, cmv ? 'run' : 'idle'); cg.userData.mx.update(fdt); } }
   if (P.chg > .15) dRing(P.x, P.y, 30 + P.chg * 44, P.chg >= 1 ? '#ffffff' : wd.col, .9);
   if (P.crit > 0) dRing(P.x, P.y, 26, '#ffffff', .5 + .4 * Math.sin(now * 16));
@@ -2395,7 +2410,7 @@ function render() {
     if (e.stun > 0) { X.font = '15px sans-serif'; X.fillStyle = '#ffe14a'; X.fillText('✦ ✦ ✦', q.x, q.y - 6); }
     if (e.boss && e.sayT > 0 && e.say) { X.globalAlpha = Math.min(1, e.sayT); X.font = 'bold 19px "Segoe UI",sans-serif'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText(e.say, q.x, q.y - 12); X.fillStyle = e.c; X.fillText(e.say, q.x, q.y - 12); X.globalAlpha = 1; }
   }
-  { const q = proj(comp.x, comp.y, 74); X.font = '11px Consolas'; X.fillStyle = 'rgba(92,208,255,.9)'; X.fillText('madk1d', q.x, q.y);
+  if (!introShot) { const q = proj(comp.x, comp.y, 74); X.font = '11px Consolas'; X.fillStyle = 'rgba(92,208,255,.9)'; X.fillText('madk1d', q.x, q.y);
     if (comp.sayT > 0) { X.font = 'bold 24px "Russo One","Segoe UI"'; X.strokeStyle = '#000'; X.lineWidth = 4; X.strokeText(comp.say, q.x, q.y - 18); X.fillStyle = '#5cd0ff'; X.fillText(comp.say, q.x, q.y - 18); } }
   for (const t of txt) { const q = proj(t.x, t.y, 60); X.globalAlpha = clamp(t.l * 2, 0, 1); X.font = (t.big ? 'bold 22px' : 'bold 15px') + ' ' + FONT; X.strokeStyle = '#000'; X.lineWidth = 3; X.strokeText(t.s, q.x, q.y); X.fillStyle = t.c; X.fillText(t.s, q.x, q.y); }
   X.globalAlpha = 1;
