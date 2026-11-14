@@ -1378,7 +1378,7 @@ function wallTex(k) {
 }
 let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [], indoorLightMix = 0;
 const ENVC = {
-  snow: { sun: '#9db4ff', si: .55, hs: '#8fa6d8', hg: '#1a1c2a', hi: .75, pt: ['#ffffff', 5, -60, 25, 420] },
+  snow: { sun: '#b3bdcd', si: .32, hs: '#929eaf', hg: '#252322', hi: .42, pt: ['#d9dee5', 2.2, -38, 14, 650] },
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
   neon: { sun: '#ff7ae0', si: .5, hs: '#b87aff', hg: '#12061e', hi: .75, pt: ['#ff5cc8', 4, 40, 10, 260] },
   swamp: { sun: '#b6e36a', si: .5, hs: '#6f9a55', hg: '#0a120a', hi: .75, pt: ['#d8ff6a', 6, 6, 30, 240] },
@@ -1391,7 +1391,7 @@ const WDECO = { snow: [['p_bush', 30], ['p_trash_A', 30], ['p_firehydrant', 26],
   neon: [['p_trafficlight_A', 110], ['p_bench', 28], ['p_box_A', 26]], swamp: [['p_waterplant_A', 40], ['p_rock_single_A', 34], ['p_tree_single_A', 130], ['p_tree_single_B', 150], ['p_rock_single_C', 44], ['p_trees_A_large', 170], ['p_trees_B_large', 170]],
   glass: [['p_cabinet_medium', 60], ['p_lamp_standing', 70], ['p_chair_A', 34]], grave: [['p_candle_triple', 24], ['p_skull', 16], ['p_bone_A', 10], ['p_pumpkin_orange_jackolantern', 24], ['p_tree_dead_medium', 120]],
   server: [['p_containers_B', 60], ['p_rocks_A', 30], ['p_lights', 110]], chart: [['p_Box_A', 30], ['p_Barrel_A', 36]] };
-const TRIM = { snow: ['#e8eef8', 0], neon: ['#ff3cc8', 1], server: ['#2affb0', 1], chart: ['#ff5a32', .8], glass: ['#9cc4f0', .3], basement: ['#2a1c12', 0], core: ['#cfd3de', 0] };
+const TRIM = { snow: ['#a5aaa9', 0], neon: ['#ff3cc8', 1], server: ['#2affb0', 1], chart: ['#ff5a32', .8], glass: ['#9cc4f0', .3], basement: ['#2a1c12', 0], core: ['#cfd3de', 0] };
 function draw(sc) { if (PPC && qual === 2) { RP.scene = sc; PPC.render(); } else R3.render(sc, CAM); }
 function sparks(x, y, a, n, c) { for (let i = 0; i < n; i++) { const an = a + rnd(-.8, .8), sp = rnd(260, 640); pts.push({ x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp, l: rnd(.12, .3), c, s: rnd(2, 3.6), st: 1 }); } }
 function fxGlow(x, y, c, s, l, h) { hfx.push({ x, y, c, s, l, ml: l, h: h || 34 }); if (hfx.length > 60) hfx.shift(); }
@@ -1416,7 +1416,13 @@ function floorTex(k) {
   const tiles = (s, col, w) => { x.strokeStyle = col; x.lineWidth = w; x.beginPath(); for (let i = 0; i <= 512; i += s) { x.moveTo(i, 0); x.lineTo(i, 512); x.moveTo(0, i); x.lineTo(512, i); } x.stroke(); };
   spk(2600, ['#000', '#fff'], 1, 3, .09);
   switch (k) {
-    case 'snow': lines(14, '#0e1014', 2); blob(9, '#8fa0bc', 24, 80, .22); blob(14, '#c9d6ea', 6, 22, .28); break;
+    case 'snow':
+      lines(20, '#111417', .7);
+      // Fine aggregate and slush replace the large painted blue circles.
+      blob(24, '#101417', 12, 65, .16);
+      spk(16000, ['#92928a', '#596068', '#111518'], .4, 1.8, .19);
+      spk(1100, ['#b6bab6', '#7e8586'], .5, 2.6, .22);
+      break;
     case 'basement': blob(18, '#2e241c', 20, 70, .5); tiles(128, '#2a2019', 3); spk(300, ['#6b5a48'], 2, 6, .3); break;
     case 'neon': tiles(64, '#ff3cc8', 2); tiles(128, '#3cdcff', 2); blob(10, '#3cdcff', 20, 50, .08); break;
     case 'swamp': blob(30, '#3f4a1e', 20, 80, .5); blob(22, '#55702a', 8, 34, .55); blob(12, '#0c140c', 18, 50, .7); spk(500, ['#6f8a3a', '#1a1a0c'], 2, 5, .4); break;
@@ -1439,6 +1445,12 @@ function skyTex(k, hor) {
 }
 function buildWorld(th) {
   if (worldG) SC.remove(worldG); worldG = new T3.Group(); SC.add(worldG); spinners = []; statics = []; movers = []; glows = [];
+  winterLamps = []; winterLights = [];
+  // Fixed light count keeps the winter shader affordable on integrated GPUs.
+  if (th.deco === 'snow') for (let i = 0; i < 4; i++) {
+    const light = new T3.PointLight('#ffc17d', 0, 330, 2);
+    worldG.add(light); winterLights.push(light);
+  }
   indoorLightMix = S.ch === 0 ? 1 : 0;
   const k = th.deco, ev = ENVC[k] || ENVC.snow, bg = new T3.Color(th.bg), hor = bg.clone().lerp(new T3.Color(ev.hs), .22), horS = '#' + hor.getHexString();
   SC.background = hor; SC.fog = new T3.Fog(hor.clone().convertSRGBToLinear(), 450, 2100);
@@ -1449,7 +1461,7 @@ function buildWorld(th) {
     gg.setAttribute('position', new T3.BufferAttribute(new Float32Array(n * 3), 3)); const [dc, dx] = cnv(32, 32), dg = dx.createRadialGradient(16, 16, 1, 16, 16, 15); dg.addColorStop(0, 'rgba(255,255,255,1)'); dg.addColorStop(1, 'rgba(255,255,255,0)'); dx.fillStyle = dg; dx.fillRect(0, 0, 32, 32);
     AMB = new T3.Points(gg, new T3.PointsMaterial({ color: ev.pt[0], size: ev.pt[1] * 2.2, map: new T3.CanvasTexture(dc), transparent: true, opacity: .85, depthWrite: false })); AMB.frustumCulled = false; SC.add(AMB); }
   // пол с текстурой, общей для всей локации
-  const ft = floorTex(k), rough = k === 'swamp' || k === 'neon' || k === 'glass' ? .5 : .93, fmat = c => new T3.MeshStandardMaterial({ map: ft, color: c, roughness: rough, metalness: k === 'server' ? .35 : 0 });
+  const ft = floorTex(k), rough = k === 'snow' ? .48 : k === 'swamp' || k === 'neon' || k === 'glass' ? .5 : .93, fmat = c => new T3.MeshStandardMaterial({ map: ft, color: c, roughness: rough, bumpMap: k === 'snow' ? ft : null, bumpScale: k === 'snow' ? .45 : 0, metalness: k === 'server' ? .35 : 0 });
   const mRoom = fmat('#ffffff'), mCor = fmat('#a8a8a8'), mSide = fmat('#d0d0d0'), mBoss = fmat('#ffdcdc'), mOut = fmat('#5a5a5a');
   const pl = (r, m, y) => { const gg = new T3.PlaneGeometry(r.w, r.h).rotateX(-Math.PI / 2), uv = gg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (r.x + uv.getX(i) * r.w) / 380, (r.y + (1 - uv.getY(i)) * r.h) / 380); const q = new T3.Mesh(gg, m); q.position.set(r.x + r.w / 2, y, r.y + r.h / 2); q.receiveShadow = true; worldG.add(q); };
   pl({ x: -2500, y: -2500, w: LV.w + 5000, h: LV.h + 5000 }, mOut, -1.5);
@@ -1573,7 +1585,7 @@ function buildWorld(th) {
   }
   // стены: забор-модель, земляной вал или текстурные панели с кромкой
   const wc = { grave: { model: 'p_fence', mh: 92 }, swamp: { h: 44, col: '#2a2415' } }[k] || {}, WH = wc.h || 120, fen = wc.model && MDL[wc.model];
-  const tex = wallTex(k), wm = wc.col ? new T3.MeshStandardMaterial({ color: wc.col, roughness: 1 }) : new T3.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: .4, roughness: .9 });
+  const tex = wallTex(k), wm = wc.col ? new T3.MeshStandardMaterial({ color: wc.col, roughness: 1 }) : new T3.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: k === 'snow' ? .10 : .4, roughness: .9 });
   const bx = G('box', () => new T3.BoxGeometry(1, 1, 1)), WL = [];
   for (const r of LV.rects) {
     if (S.ch === 0 && r.kind === 'start') continue;
@@ -1620,10 +1632,17 @@ function buildWorld(th) {
       p.add(box(88, 72, 76, '#545b67', 0, 36, 0), box(88, 6, 76, '#bac8db', 0, 74, 0));
     } else if (!d.solid) {
       if (d.k === 'swamp' && MDL.p_waterlily_A) { p = new T3.Group(); const w = sph(1, '#0b1a12', 0, 0, 0, { roughness: .08, metalness: .3, transparent: true, opacity: .85 }); w.scale.set(74 * s, 1.2, 44 * s); w.castShadow = false; const ly = prop('p_waterlily_A', 7); ly.position.set((v - .5) * 50, 1, (v - .5) * 20); p.add(w, ly); p.position.set(x, .6, z); }
-      else if (d.k === 'snow') { p = sph(1, '#7f93b4', x, 0, z); p.scale.set(60 * s, 9 * s, 36 * s); p.castShadow = false; }
+      else if (d.k === 'snow') { p = sph(1, '#abb1b4', x, 0, z, { roughness: 1 }); p.scale.set(60 * s, 9 * s, 36 * s); p.castShadow = false; }
       else if (d.k === 'swamp') { p = sph(1, '#3d6b2e', x, 0, z, { transparent: true, opacity: .75 }); p.scale.set(80 * s, 4, 46 * s); p.castShadow = false; }
       else if (d.k === 'core') { p = box(18, 18, 18, '#' + new T3.Color().setHSL(v, .6, .6).getHexString(), 0, 0, 0, { emissive: '#445', emissiveIntensity: .5 }); p.userData = { a: v * TAU, rr: 150 + v * 800, h: 130 + v * 220, sp: (v > .5 ? 1 : -1) * .15 }; spinners.push(p); }
-    } else if (d.pd && MDL[d.pd[0]]) { p = prop(d.pd[0], d.pd[1], d.pd[3]); p.position.set(x, 0, z); p.rotation.y = v * 40; if (/light|lantern|lamp/.test(d.pd[0])) { const gq = glowS(k === 'neon' ? '#3cdcff' : k === 'server' ? '#2affb0' : '#ffcf7a', 190); gq.position.y = d.pd[1] * .93; p.add(gq); glows.push(gq); } }
+    } else if (d.pd && MDL[d.pd[0]]) { p = prop(d.pd[0], d.pd[1], d.pd[3]); p.position.set(x, 0, z); p.rotation.y = v * 40; if (/light|lantern|lamp/.test(d.pd[0])) { const gq = glowS(k === 'neon' ? '#3cdcff' : k === 'server' ? '#2affb0' : '#ffcf7a', 190); gq.position.y = d.pd[1] * .93; p.add(gq); glows.push(gq);
+      if (k === 'snow') {
+        winterLamps.push(new T3.Vector3(x, d.pd[1] * .88, z));
+        gq.scale.set(95, 95, 1);
+        const pool = new T3.Mesh(new T3.PlaneGeometry(260, 260).rotateX(-Math.PI / 2),
+          new T3.MeshBasicMaterial({ map: gq.material.map, color: '#d99b55', transparent: true, opacity: .15, depthWrite: false, blending: T3.AdditiveBlending }));
+        pool.position.set(x, 1, z); worldG.add(pool);
+      } } }
     else {
       p = new T3.Group(); p.position.set(x, 0, z); p.rotation.y = (v - .5) * 1.2;
       switch (d.k) {
@@ -1826,7 +1845,7 @@ const ANIM = { idle: ['Idle'], run: ['Running_A', 'Running'], atk: ['1H_Melee_At
   mh: ['2H_Melee_Attack_Spin'], ms: ['2H_Melee_Attack_Spinning', '2H_Melee_Attack_Spin'], v1: ['Throw'], vh: ['Spellcast_Shoot'], p1: ['Unarmed_Melee_Attack_Punch_A'], p2: ['Unarmed_Melee_Attack_Punch_B'], kick: ['Unarmed_Melee_Attack_Kick'],
   dF: ['Dodge_Forward'], dB: ['Dodge_Backward', 'Dodge_Forward'], dL: ['Dodge_Left', 'Dodge_Forward'], dR: ['Dodge_Right', 'Dodge_Forward'], hitB: ['Hit_B', 'Hit_A'], jump: ['Jump_Full_Short'] };
 const ROLLA = new T3.Vector3(), ROLLO = new T3.Vector3();
-let HW = null, PTI = null, SHC = null, glows = [];
+let HW = null, PTI = null, SHC = null, glows = [], winterLamps = [], winterLights = [];
 const KK = { vanek: 1, kent: 1, mage: 1, barb: 1, knight: 1, skmage: 1, skmin: 1, skrog: 1, skwar: 1 };
 // склейка геометрий: items = [{ g, m }] (m — матрица или null), у всех одинаковый набор атрибутов
 function mergeGeos(items) {
@@ -2196,12 +2215,22 @@ function render() {
   indoorLightMix += (indoorTarget - indoorLightMix) * (1 - Math.exp(-fdt * 5));
   if (AMB) {
     AMB.visible = outside;
-    AMB.material.opacity = outside ? .85 : 0;
+    AMB.material.opacity = outside ? (th.deco === 'snow' ? .55 : .85) : 0;
   }
   SUN.intensity = environment.si + (.025 - environment.si) * indoorLightMix;
   if (HEMI) HEMI.intensity = environment.hi + (.09 - environment.hi) * indoorLightMix;
   for (const light of SC.children) {
-    if (light.isDirectionalLight && light !== SUN) light.intensity = .45 + (.025 - .45) * indoorLightMix;
+    if (light.isDirectionalLight && light !== SUN) light.intensity = (th.deco === 'snow' ? .18 : .45) * (1 - indoorLightMix) + .025 * indoorLightMix;
+  }
+  if (winterLights.length) {
+    const nearest = winterLamps.slice().sort((a, b) =>
+      Math.hypot(a.x - P.x, a.z - P.y) - Math.hypot(b.x - P.x, b.z - P.y));
+    winterLights.forEach((light, i) => {
+      const lamp = nearest[i];
+      if (lamp) { light.position.copy(lamp); light.updateMatrix(); }
+      const distance = lamp ? Math.hypot(lamp.x - P.x, lamp.z - P.y) : 1000;
+      light.intensity = 2.8 * clamp((650 - distance) / 250, 0, 1) * (1 - indoorLightMix);
+    });
   }
   const introShot = indoors && S.step === 0 && (mode === 'title' || mode === 'dlg');
   if (introShot) {
