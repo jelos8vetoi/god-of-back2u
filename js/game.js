@@ -345,7 +345,7 @@ function loadLevel() {
     }
   }
   let cp = LV.main[0]; for (let i = 0; i < S.step; i++) if (LV.stepRoom[i]) cp = LV.stepRoom[i];
-  P.x = cp.cx; P.y = cp.cy + 40; P.thr = null; P.fin = null; P.chg = 0; P.atk = null; banners = []; hfx = []; marks = []; cine = null; P.dodge = 0; P.inv = 0; P.spin = 0; slowmo = 0; hitstop = 0; comp.x = P.x - 40; comp.y = P.y + 30;
+  P.x = cp.cx; P.y = cp.cy + 40; P.thr = null; P.throwCooldown = 0; P.fin = null; P.chg = 0; P.atk = null; banners = []; hfx = []; marks = []; cine = null; P.dodge = 0; P.inv = 0; P.spin = 0; slowmo = 0; hitstop = 0; comp.x = P.x - 40; comp.y = P.y + 30;
 }
 function startChapter() {
   loadLevel(); save(); const ch = CH[S.ch];
@@ -718,17 +718,37 @@ function aimAssist(w) {
   return best ? ang(P, best) : P.aim;
 }
 function doThrow() {
-  if (P.thr) { if (P.thr.st !== 'back') { P.thr.st = 'back'; P.thr.hit = new Set(); sfx.swing(); } return; }
-  if (S.weapon !== 'bat' || P.atk || P.dodge > 0) return;
+  if (P.thr) { if (P.thr.st !== 'back') { P.thr.st = 'back'; sfx.swing(); } return; }
+  if (S.weapon !== 'bat' || P.atk || P.dodge > 0 || P.throwCooldown > 0) return;
   P.thr = { x: P.x, y: P.y, a: aimAssist('vinyl'), st: 'out', t: .5, hit: new Set(), rot: 0 }; P.chg = 0; sfx.swing(); float(P.x, P.y - 50, 'БРОСОК', '#ff5a2a');
 }
 function updThrow(dt) {
+  if (P.throwCooldown > 0) P.throwCooldown = Math.max(0, P.throwCooldown - dt);
   const b = P.thr; if (!b) return; b.rot += dt * 26;
   if (b.st !== 'stuck') hitProps(b.x, b.y, 22, true);
   if (b.st === 'out') { b.x += Math.cos(b.a) * 980 * dt; b.y += Math.sin(b.a) * 980 * dt; b.t -= dt; if (b.t <= 0 || !(fs ? inR(fs.room, b.x, b.y, 12) : okPos(b.x, b.y, 12)) || obs.some(o => (o.x - b.x) ** 2 + (o.y - b.y) ** 2 < o.r * o.r)) { b.st = 'stuck'; b.t = 3; } }
-  else if (b.st === 'stuck') { b.t -= dt; if (b.t <= 0) { b.st = 'back'; b.hit = new Set(); } }
-  else { const a = ang(b, P); b.x += Math.cos(a) * 1300 * dt; b.y += Math.sin(a) * 1300 * dt; if (dist(b, P) < 36) { if (b.hitEnemy) completeTomskDrill('throw'); P.thr = null; sfx.block(); P.swag = Math.min(100, P.swag + 4); return; } }
-  if (b.st !== 'stuck') { const dm = WP.bat.heavy.dmg * dmgMul('bat') * .75; for (const e of ens) if (!e.dead && e.spawn <= 0 && !b.hit.has(e) && dist(e, b) < e.r + 24) { b.hit.add(e); b.hitEnemy = true; dmgE(e, dm, { w: 'bat', kb: 200, heavy: true, stun: b.st === 'back' ? .5 : 0 }); sfx.hit(true); } }
+  else if (b.st === 'stuck') { b.t -= dt; if (b.t <= 0) b.st = 'back'; }
+  else {
+    const a = ang(b, P), step = Math.min(1300 * dt, dist(b, P));
+    b.x += Math.cos(a) * step; b.y += Math.sin(a) * step;
+    if (dist(b, P) < 36) {
+      P.thr = null;
+      P.throwCooldown = 1.2;
+      if (b.hitEnemy) { completeTomskDrill('throw'); P.swag = Math.min(100, P.swag + 4); }
+      sfx.block();
+      return;
+    }
+  }
+  if (b.st === 'stuck') return;
+  const returning = b.st === 'back';
+  const dmg = WP.bat.heavy.dmg * dmgMul('bat') * (returning ? .25 : .45);
+  for (const e of ens) {
+    if (e.dead || e.spawn > 0 || b.hit.has(e) || dist(e, b) >= e.r + 24) continue;
+    b.hit.add(e);
+    b.hitEnemy = true;
+    dmgE(e, dmg, { w: 'bat', kb: returning ? 40 : 85 });
+    sfx.hit(false);
+  }
 }
 function swW(w) { if (!S.wl[w] || S.weapon === w) return; S.weapon = w; P.atk = null; P.chg = 0; P.swT = 1.2; }
 function react(e, dmg, o) {
@@ -2083,7 +2103,11 @@ function drawHud() {
     X.font = '24px "Segoe UI Emoji"'; X.textAlign = 'center'; X.fillStyle = '#fff'; X.globalAlpha = k >= 1 ? 1 : .4; X.fillText('🗣️', cx, cy + 9); X.globalAlpha = 1;
     X.font = '12px ' + FONT; X.fillStyle = '#5cd0ff'; X.fillText(KN('adlib') + ' · madk1d', cx, cy + 48);
   }
-  if (S.weapon === 'bat') { X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = P.thr ? '#ffd23b' : '#8d97aa'; X.fillText(P.thr ? '[' + KN('thr') + '] — вернуть биту' : '[' + KN('thr') + '] — бросить биту', 46, H - 184); }
+  if (S.weapon === 'bat') {
+    X.font = '12px ' + FONT; X.textAlign = 'left'; X.fillStyle = P.thr ? '#ffd23b' : '#8d97aa';
+    const label = P.thr ? 'вернуть биту' : P.throwCooldown > 0 ? 'бросок через ' + P.throwCooldown.toFixed(1) + ' с' : 'бросить биту';
+    X.fillText('[' + KN('thr') + '] — ' + label, 46, H - 184);
+  }
   chip(W - 30, 16, '▶ ' + S.xp, '#7dff7d'); chip(W - 30, 50, '▣ ' + S.tapes, '#ffd23b');
   X.textAlign = 'center';
   if (fs && fs.boss && !fs.boss.dead) {
