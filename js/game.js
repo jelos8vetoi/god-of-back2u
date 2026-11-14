@@ -1489,6 +1489,48 @@ function buildWorld(th) {
     bulb.position.set(r.cx, 155, r.cy);
     vestibule.add(bulb);
     worldG.add(vestibule);
+    // Five-storey residential shell; the playable vestibule occupies the ground floor.
+    const house = new T3.Group();
+    house.name = 'TomskStartHouse';
+    const front = r.x + r.w + 9;
+    const add = (w, h, d, c, x, y, z, o) => house.add(box(w, h, d, c, x, y, z, o));
+    add(r.w + 20, 620, r.h + 24, '#777865', r.cx, 510, r.cy);
+    // Front panels and recessed windows face the courtyard (+X).
+    for (let floor = 0; floor < 5; floor++) {
+      const base = floor * 160;
+      for (let col = 0; col < 5; col++) {
+        const z = r.y + (col + .5) * r.h / 5;
+        if (floor === 0 && col === 2) continue;
+        add(12, 156, r.h / 5 - 2, col % 2 ? '#96907a' : '#747961', front, base + 80, z);
+        add(5, 83, 61, '#464b46', front + 8, base + 91, z);
+        const lit = (floor * 7 + col * 3) % 6 === 1;
+        add(3, 73, 51, lit ? '#baa16e' : '#323e40', front + 12, base + 91, z,
+          lit ? { emissive: '#e6b563', emissiveIntensity: .35 } : undefined);
+        for (const dz of [-29, 0, 29]) add(7, 83, 3, '#c0ba9e', front + 14, base + 91, z + dz);
+        for (const dy of [-42, 42]) add(9, 4, 65, '#c0ba9e', front + 14, base + 91 + dy, z);
+        add(14, 5, 69, '#aaa896', front + 17, base + 47, z);
+      }
+      add(10, 3, r.h + 22, '#5d6257', front + 7, base + 159, r.cy);
+    }
+    // Roof slab, parapet and rooftop service structures.
+    add(r.w + 40, 16, r.h + 44, '#92938a', r.cx, 824, r.cy);
+    add(r.w + 25, 5, r.h + 29, '#454b4d', r.cx, 835, r.cy);
+    for (const z of [r.y - 16, r.y + r.h + 16]) add(r.w + 40, 23, 9, '#85877e', r.cx, 847, z);
+    for (const x of [r.x - 16, front + 7]) add(9, 23, r.h + 40, '#85877e', x, 847, r.cy);
+    add(90, 65, 75, '#8a8370', r.x + 100, 868, r.cy);
+    add(100, 7, 85, '#656a68', r.x + 100, 904, r.cy);
+    for (const z of [r.y + 65, r.y + r.h - 70]) {
+      add(22, 48, 23, '#686e69', r.cx, 861, z);
+      add(34, 6, 35, '#93968d', r.cx, 888, z);
+      add(8, 796, 8, '#646e65', front + 18, 402, z < r.cy ? r.y - 5 : r.y + r.h + 5);
+    }
+    // Portal preserves the existing door opening and its collision.
+    for (const dz of [-113, 113]) add(45, 150, 14, '#99947f', front + 13, 75, r.cy + dz);
+    add(93, 12, 250, '#737970', front + 35, 156, r.cy);
+    add(8, 9, 28, '#e7bc72', front + 18, 137, r.cy, { emissive: '#ffc469', emissiveIntensity: .8 });
+    add(5, 34, 28, '#756d53', front + 18, 82, r.cy + 145);
+    for (let i = 0; i < 5; i++) add(2, 9, 7, '#d1c7a5', front + 22, 73 + i % 3 * 8, r.cy + 137 + i % 2 * 11);
+    worldG.add(house);
   }
   // стены: забор-модель, земляной вал или текстурные панели с кромкой
   const wc = { grave: { model: 'p_fence', mh: 92 }, swamp: { h: 44, col: '#2a2415' } }[k] || {}, WH = wc.h || 120, fen = wc.model && MDL[wc.model];
