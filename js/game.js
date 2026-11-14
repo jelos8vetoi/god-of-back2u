@@ -257,6 +257,7 @@ const PROP_R = { snow: v => v < .4 ? 10 : v < .7 ? 26 : 34, basement: () => 30, 
 function makeDeco() {
   deco = []; obs = []; const k = CH[S.ch].th.deco;
   for (const r of LV.rooms) {
+    if (S.ch === 0 && r.kind === 'start') continue;
     const big = r.kind === 'fight' || r.kind === 'boss', spots = [];
     for (let i = 0, n = Math.round(r.w * r.h / 110000); i < n; i++) deco.push({ x: rnd(r.x + 70, r.x + r.w - 70), y: rnd(r.y + 70, r.y + r.h - 70), s: rnd(.6, 1.3), v: Math.random(), k });
     if (tomskArch(r)) {
@@ -283,6 +284,9 @@ function loadLevel() {
   ents.push({ k: 'seva', x: LV.exit.cx - 170, y: LV.exit.cy - 130 }, { k: 'portal', x: LV.exit.cx + 90, y: LV.exit.cy + 30 });
   for (const r of LV.sides) {
     const s = r.side;
+    if (s.power) {
+      ents.push({ k: 'power', id: 'tomskPower', x: r.cx, y: r.y + 65, room: r });
+    }
     if (s.npc) ents.push({ k: 'npc', id: s.npc, x: r.cx, y: r.cy - 130 });
     if (s.lore != null) ents.push({ k: 'lore', id: 'c' + S.ch + 'lore' + s.lore, i: s.lore, x: r.cx - 180, y: r.cy + 120 });
     if (s.chest) ents.push({ k: 'chest', id: s.id + 'c', loot: s.chest, x: r.cx + 180, y: r.cy + 110, room: r });
@@ -295,6 +299,11 @@ function loadLevel() {
     [LV.main[1], LV.main[2]].forEach((r, i) => { if (!r) return; const c = (S.ch + i * 3) % 4; ents.push({ k: 'stash', id: 'c' + S.ch + 'st' + i, i, x: c % 2 ? r.x + r.w - 62 : r.x + 62, y: c < 2 ? r.y + 62 : r.y + r.h - 62 }); });
   }
   for (const r of LV.rooms) {
+    if (r.side?.power) {
+      const barrel = { k: 'brk', x: r.cx + 90, y: r.cy - 65, r: 20, ex: true, archBarrel: true };
+      ents.push(barrel);
+      obs.push(barrel);
+    }
     if (tomskArch(r)) {
       for (const [dx, dy] of [[-355, 145], [5, -240], [340, 185]]) {
         const barrel = { k: 'brk', x: r.cx + dx, y: r.cy + dy, r: 20, ex: true, archBarrel: true };
@@ -432,7 +441,7 @@ function scan() {
   if (fs) return;
   for (const r of LV.sides) {
     const s = r.side;
-    if (s.guard && !S.done[s.id] && inR(r, P.x, P.y, 110)) { startEnc(r, s.guard, null, () => { S.done[s.id] = 1; toast('Тупик зачищен', 2.5); save(); }); return; }
+    if (s.guard && !S.done[s.id] && inR(r, P.x, P.y, 110)) { startEnc(r, s.guard, null, () => { S.done[s.id] = 1; toast(s.power ? 'Щиток доступен' : 'Тупик зачищен', 2.5); save(); }); return; }
   }
   for (const o of ents) {
     if (o.k === 'tgt' || o.k === 'brk') continue;
@@ -444,6 +453,10 @@ function scan() {
     } else if (d < 95) {
       if (o.k === 'chest') { if (S.done[o.id] || (o.room.side.guard && !S.done[o.room.side.id])) continue; if (o.lock && !S.done[o.lock]) { prompt = '🔒  Сбей 3 мишени 🎯 на стене: бросок биты [' + KN('thr') + '] или диски'; continue; } prompt = '[' + KN('interact') + ']  Открыть сундук'; }
       else if (o.k === 'stash') { if (S.done[o.id] || d > 70) continue; prompt = '[' + KN('interact') + ']  ✨ Тайник'; }
+      else if (o.k === 'power') {
+        if (S.done[o.id] || !S.done[o.room.side.id]) continue;
+        prompt = '[' + KN('interact') + ']  Включить фонари у арки';
+      }
       else if (o.k === 'npc') prompt = '[' + KN('interact') + ']  Поговорить: ' + NPCS[o.id].n;
       else prompt = '[' + KN('interact') + ']  Дядя Сева на связи — мастерская';
       target = { o };
@@ -501,6 +514,12 @@ function doInteract() {
   const o = target.o;
   if (o.k === 'chest') { S.done[o.id] = 1; reward(o.loot, 'Сундук'); }
   else if (o.k === 'stash') { S.done[o.id] = 1; reward({ xp: 80 + S.ch * 25, hp: o.i ? 0 : 5 }, '✨ Тайник'); secretCheck(); save(); }
+  else if (o.k === 'power') {
+    S.done[o.id] = 1;
+    toast('Фонари у арки включены · свет покажет, откуда идут боты', 5);
+    sfx.buy();
+    save();
+  }
   else if (o.k === 'npc') talk(o);
   else { P.hp = maxHp(); openUp(true); }
 }
@@ -616,6 +635,13 @@ function mkEnemy(type, x, y) {
     state: 'idle', t: 0, cdT: rnd(.6, 2), aa: 0, kx: 0, ky: 0, stun: 0, slow: 0, spawn: .7, fl: 0, xp: Math.round(d.xp * .42 * (1 + S.ch * .15)), rng: d.rng || 50 };
 }
 function spawnWave() {
+  if (fs.room.side?.power) {
+    const { cx, cy } = fs.room;
+    const guard = mkEnemy('hater', cx + 24, cy - 100);
+    guard.guardPost = true;
+    ens.push(guard);
+    return;
+  }
   if (fs.arch) {
     const { cx, cy } = fs.room;
     ens.push(mkEnemy('bot', cx - 55, cy - 175), mkEnemy('bot', cx + 85, cy + 55));
@@ -1157,14 +1183,21 @@ function update(dt) {
     if (!fs.arch) fs.surv -= dt;
     fs.spT = (fs.spT || 0) - dt;
     if (fs.arch) {
+      const limit = [4, 6, 8][S.diff] ?? 6;
+      if (S.done.tomskPower && fs.surv > 0 && fs.spT <= 2 && ens.length < limit && !fs.entry) {
+        const { x, y, w, h, cx, cy } = fs.room;
+        const entries = [{ x: x + 85, y: cy }, { x: x + w - 85, y: cy },
+          { x: cx, y: y + 85 }, { x: cx, y: y + h - 85 }];
+        fs.entry = entries.sort((a, b) => dist(b, P) - dist(a, P))[0];
+      }
       if (fs.surv > 0 && fs.spT <= 0) {
         fs.spT = [8, 6, 5][S.diff] ?? 6;
-        const limit = [4, 6, 8][S.diff] ?? 6;
         for (let i = 0; i < (S.diff === 0 ? 1 : 2) && ens.length < limit; i++) {
-          const p = edgePos();
+          const p = fs.entry ? { x: fs.entry.x + i * 34, y: fs.entry.y + i * 34 } : edgePos();
           const ranged = i === 0 && fs.surv <= 40 && !ens.some(e => e.type === 'hater');
           ens.push(mkEnemy(ranged ? 'hater' : 'bot', p.x, p.y));
         }
+        fs.entry = null;
       }
     } else if (fs.spT <= 0 && ens.length < 12) { fs.spT = 2.4; for (let i = 0; i < 2 + (S.ch > 4 ? 1 : 0); i++) { const p = edgePos(); ens.push(mkEnemy(fs.pool[Math.floor(Math.random() * fs.pool.length)], p.x, p.y)); } }
     if (fs.surv <= 0) { for (const q of ens) { q.dead = true; burst(q.x, q.y, q.c, 8); } fs.done = true; fs.clearT = 1.4; float(P.x, P.y - 60, 'ВЫЖИЛ', '#7dff7d', 1); sfx.buy(); }
@@ -1367,6 +1400,22 @@ function buildWorld(th) {
   pl({ x: -2500, y: -2500, w: LV.w + 5000, h: LV.h + 5000 }, mOut, -1.5);
   for (const r of LV.cors) pl(r, mCor, 0);
   for (const r of LV.rooms) pl(r, r.kind === 'boss' ? mBoss : r.kind === 'side' ? mSide : mRoom, .3);
+  if (S.ch === 0) {
+    const r = LV.main[0];
+    const vestibule = new T3.Group();
+    const tile = fmat('#928679');
+    pl({ x: r.x + 12, y: r.y + 12, w: r.w - 24, h: r.h - 24 }, tile, .7);
+    for (const dy of [-92, 92]) {
+      vestibule.add(box(28, 128, 24, '#35423e', r.x + r.w - 15, 64, r.cy + dy));
+    }
+    vestibule.add(box(136, 72, 18, '#66645a', r.cx - 180, 100, r.y + 28));
+    vestibule.add(box(27, 22, 208, '#35423e', r.x + r.w - 15, 129, r.cy));
+    const sign = emo('ВЫХОД', 74, 147);
+    sign.position.x = r.x + r.w - 28;
+    sign.position.z = r.cy;
+    vestibule.add(sign);
+    worldG.add(vestibule);
+  }
   // стены: забор-модель, земляной вал или текстурные панели с кромкой
   const wc = { grave: { model: 'p_fence', mh: 92 }, swamp: { h: 44, col: '#2a2415' } }[k] || {}, WH = wc.h || 120, fen = wc.model && MDL[wc.model];
   const tex = wallTex(k), wm = wc.col ? new T3.MeshStandardMaterial({ color: wc.col, roughness: 1 }) : new T3.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: .4, roughness: .9 });
@@ -1457,7 +1506,8 @@ function buildWorld(th) {
       if (mg) { g.add(mg, emo(o.k === 'seva' ? '🔧' : '🎤', 26, 100)); statics.push(mg); }
       else g.add(cyl(13, 17, 36, c, 0, 18, 0), sph(9.5, '#e8c39e', 0, 44, 0), cyl(10, 10.5, 5, '#22242e', 0, 51, 0), box(9, 2, 14, '#22242e', 8, 49, 0), emo(o.k === 'seva' ? '🔧' : '🎤', 26, 80));
       if (o.k === 'seva') { const b = new T3.Group(); b.add(box(44, 26, 28, '#3a2718', 0, 13, 0), box(30, 2, 20, '#49e0ff', 0, 27, 0, { emissive: '#49e0ff', emissiveIntensity: .9 })); b.position.set(o.x, 0, o.y + 50); worldG.add(b); }
-    } else if (o.k === 'chest') g.add(box(46, 26, 30, '#7a4a1e', 0, 13, 0), box(48, 8, 32, '#ffd23b', 0, 28, 0, { metalness: .7, roughness: .3, emissive: '#553a00', emissiveIntensity: .7 }), emo(o.loot.hp ? '💛' : o.loot.tapes ? '📀' : '🎁', 24, 58));
+    } else if (o.k === 'power') g.add(box(58, 76, 28, '#46534e', 0, 38, 0), emo('⚡', 28, 94));
+    else if (o.k === 'chest') g.add(box(46, 26, 30, '#7a4a1e', 0, 13, 0), box(48, 8, 32, '#ffd23b', 0, 28, 0, { metalness: .7, roughness: .3, emissive: '#553a00', emissiveIntensity: .7 }), emo(o.loot.hp ? '💛' : o.loot.tapes ? '📀' : '🎁', 24, 58));
     else if (o.k === 'lore') g.add(emo('📼', 36, 30));
     else if (o.k === 'swall') { for (const t of [-78, 0, 78]) { const rk = prop(t ? 'p_rock_single_C' : 'p_rock_single_A', 120 + Math.random() * 30) || box(80, 120, 60, '#5a5a5a', 0, 60, 0); rk.position.set(o.hz ? t : 0, rk.position.y, o.hz ? 0 : t); rk.rotation.y = Math.random() * 6; g.add(rk); } }
     else if (o.k === 'stash') g.add(emo('✨', 26, 14));
@@ -1552,13 +1602,18 @@ function drawNav() {
   if (fs?.arch && !fs.done) ob = 'Продержись у арки до конца отсчёта';
   else if (fs && !fs.done) ob = fs.boss ? 'Победи: ' + fs.boss.d.n : (fs.cb && fs.room.kind === 'side' ? 'Зачисти тупик' : 'Зачисти комнату');
   else if (exitOpen()) ob = 'Войди в портал — к следующему серверу';
-  else if (tomskOpening(objRoom)) ob = 'Выйди во двор';
+  else if (tomskOpening(objRoom)) ob = 'Выйди из подъезда во двор';
   else if (tomskArch(objRoom)) ob = 'Доберись до прохода к арке';
   else if (S.ch === 0 && objRoom?.kind === 'boss') ob = 'Иди к арке · там Курьер';
   else if (objRoom) ob = objRoom.kind === 'boss' ? 'Иди к арене босса' : 'Двигайся дальше — к следующей комнате';
   X.textAlign = 'left'; let y = 34;
   if (ob) { X.font = 'bold 15px "Russo One","Segoe UI"'; X.fillStyle = '#ffd23b'; X.fillText('◆ ' + ob, 30, y); y += 22; }
   X.font = '13px "Russo One","Segoe UI"';
+  if (S.ch === 0 && !fs && tomskArch(objRoom) && !S.done.tomskPower) {
+    X.fillStyle = '#ffd480';
+    X.fillText('◇ Щитовая за северным тупиком · включи фонари у арки', 30, y);
+    y += 19;
+  }
   if (S.ch === 0 && !fs && S.step >= LV.main[1].step) {
     const rooms = LV.sides.filter(r => r.side.chest && !S.done[r.side.id + 'c']);
     if (rooms.length) {
@@ -2062,6 +2117,11 @@ function render() {
 
   // зоны, сферы, снаряды, эффекты
   for (const h of haz) { const c = h.pl ? '#5cd0ff' : '#ff3030'; dCirc(h.x, h.y, h.r, c, .22); dRing(h.x, h.y, h.r, c, .9); dRing(h.x, h.y, h.r * clamp(1 - h.t / h.mt, 0, 1), '#ffffff', .7); }
+  if (fs?.entry && !fs.done) {
+    const { x, y } = fs.entry;
+    dCirc(x, y, 110, '#ffd480', .28);
+    dRing(x, y, 110, '#ffd480', .95);
+  }
   for (const r of rings) dRing(r.x, r.y, r.r, r.c, clamp(r.l / .35, 0, 1));
   for (const o of orbs) { const m = use('orb', () => mesh(new T3.SphereGeometry(8, 12, 10), new T3.MeshBasicMaterial({ color: '#7dff7d' }))); m.position.set(o.x, 16 + Math.sin(now * 5 + o.x) * 5, o.y); }
   for (const p of prj) {

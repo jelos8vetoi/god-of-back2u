@@ -99,6 +99,7 @@ const LEVELS = [
     { at: 1, d: 'S', npc: 'lil' },
     { at: 1, d: 'N', lore: 0, chest: { item: 'tape', xp: 300 } },
     { at: 2, d: 'S', lore: 1, guard: [[['bot', 4], ['hater', 1, 'E']]], chest: { hp: 20, tapes: 1 } },
+    { fromSide: 1, d: 'N', power: true, guard: [[['hater', 1]]] },
   ] },
   { path: 'ESE', side: [{ at: 1, d: 'N', npc: 'ded' }, { at: 0, d: 'N', npc: 'reverb' }, { at: 0, d: 'S', lore: 0, chest: { item: 'flash' } }, { at: 1, d: 'E', q: 'ded', lore: 1, guard: [[['clipper', 3]], [['clipper', 2], ['bot', 3, 'E']]], chest: { tapes: 1 } }] },
   { path: 'ENEE', side: [{ at: 1, d: 'S', npc: 'hook' }, { at: 1, d: 'E', npc: 'paint' }, { at: 2, d: 'N', q: 'paint', lore: 0, guard: [[['clipper', 3], ['hater', 2]], [['troll', 1, 'E'], ['hater', 2]]], chest: { hp: 10 } }, { at: 2, d: 'W', lore: 1, chest: { item: 'pods' } }] },
@@ -126,7 +127,13 @@ function buildLevel(ci) {
   const main = [mk('start', 0, 0)], stepRoom = {};
   enc.forEach((si, k) => { const r = attach(main[k], def.path[k], ch.steps[si].t === 'boss' ? 'boss' : 'fight'); r.step = si; stepRoom[si] = r; main.push(r); });
   const exit = attach(main[main.length - 1], def.path[enc.length], 'exit');
-  const sides = (def.side || []).map((s, i) => { const r = attach(main[s.at], s.d, 'side'); r.side = Object.assign({ id: 'c' + ci + 's' + i }, s); return r; });
+  const sides = [];
+  for (const [i, s] of (def.side || []).entries()) {
+    const parent = s.fromSide == null ? main[s.at] : sides[s.fromSide];
+    const r = attach(parent, s.d, 'side');
+    r.side = { id: 'c' + ci + 's' + i, ...s };
+    sides.push(r);
+  }
   const sd = 'ENS'[ci % 3], sec = attach(exit, sd, 'secret'); sec.secret = true; sec.side = { id: 'c' + ci + 'sec', d: sd }; cors[cors.length - 1].secret = true;
   const all = rooms.concat(cors); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const r of all) { x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); }
