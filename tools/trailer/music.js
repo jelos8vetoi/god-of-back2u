@@ -35,43 +35,54 @@ const braam = (t, root, big) => {
 };
 const riser = (t0, dur) => { noise(t0, dur, { v: .25, cut: x => 300 + 9000 * Math.pow(x / dur, 2), env: x => Math.pow(x / dur, 2.2), hp: 1, send: .4, wide: 1 }); tone(t0, dur, x => 180 + 900 * Math.pow(x / dur, 2), { type: 'tri', v: .05, a: dur * .9, r: .02 }); };
 const pad = (t0, dur, notes, v) => { for (const n of notes) for (const d of [-7, 7]) tone(t0, dur, midi(n) * Math.pow(2, d / 1200), { type: 'saw', v: v || .03, a: 1.2, r: 1.5, send: .4, pan: d / 14 }); };
+const cow = (t, n, v) => { for (const [m, g] of [[1, 1], [1.504, .7]]) tone(t, .05, midi(n) * m, { type: 'sq', v: (v || .07) * g, a: .002, r: .16, decay: .09, send: .45, pan: m > 1 ? .3 : -.3 }); };
+const snare = (t, v) => { noise(t, .18, { v: v || .35, cut: 7000, hp: 1, decay: .05, send: .3 }); tone(t, .03, x => 190 * Math.exp(-x * 20) + 150, { v: .25, r: .08, decay: .05 }); };
+const stab = (t, root, v) => { for (const [n, det] of [[root, -8], [root, 8], [root + 7, 0], [root + 12, 5]]) tone(t, .22, midi(n) * Math.pow(2, det / 1200), { type: 'saw', v: v || .06, a: .004, r: .2, decay: .2, send: .5, pan: det / 16 }); };
 
-// 0–12: вступление, D-минор
-pad(0, 12.2, [38, 41, 45, 50], .028);
-tone(0, 12, 36.7, { v: .2, a: 2, r: .2 });
-noise(0, 12, { v: .05, cut: 700, env: x => .6 + .4 * Math.sin(x * 1.3), wide: 1, send: .3 });
-for (let b = 4; b < 12; b += 1) kick(b, b < 8 ? .45 : .6);               // сердцебиение
-for (let b = 8; b < 12; b += .25) hat(b, b % .5 ? .04 : .07);
-for (const [t, n] of [[4, 62], [6, 65], [8, 69], [10, 67]]) tone(t, 1.6, midi(n), { type: 'tri', v: .07, a: .02, r: 1.2, decay: 1.2, send: .7 });
-riser(10, 2);
-// 12: удар и тишина
-braam(12, 38, false);
-// 13–19: дроп, сетка 120 BPM от 13 с
-const T0 = 13, B = .5;
-for (let bar = 0; bar < 3; bar++) {
-  const s = T0 + bar * 2;
-  braam(s, 38 + [0, 3, 5][bar], false);
-  kick(s, 1); kick(s + 1.25, .8); if (bar !== 1) kick(s + 1.75, .7);
-  sub808(s, 26 + [0, 3, 5][bar], .9, -2); sub808(s + 1.25, 26 + [0, 3, 5][bar], .6, bar === 2 ? 5 : 0);
-  clap(s + 1, .45);
+// 0–8: вступление, D-минор — холод, сердце, редкие ноты
+pad(0, 8.4, [38, 41, 45, 50], .028);
+tone(0, 8.2, 36.7, { v: .2, a: 2, r: .2 });
+noise(0, 8.4, { v: .05, cut: 700, env: x => .6 + .4 * Math.sin(x * 1.3), wide: 1, send: .3 });
+for (let b = 2; b < 8; b += 1) kick(b, b < 5 ? .45 : .62);
+for (let b = 5; b < 8; b += .25) hat(b, b % .5 ? .04 : .07);
+for (const [t, n] of [[.5, 62], [2.5, 65], [4.5, 69], [5.5, 67], [6.5, 65], [7, 62]]) tone(t, 1.4, midi(n), { type: 'tri', v: .07, a: .02, r: 1.2, decay: 1.1, send: .7 });
+riser(6.2, 1.8);
+// 8: удар, тишина под фразу, обратный всос перед дропом
+braam(8, 38, false);
+riser(9.2, .8);
+for (let h = 9.5; h < 10; h += 1 / 16) snare(h, .12 + (h - 9.5) * .5);
+// 10–18: дроп — фонк: ковбелл, перегруженный 808, частые хэты
+const PROG = [0, 0, 3, 5], MEL = [74, 74, 77, 74, 72, 74, 69, 72, 74, 74, 77, 79, 77, 74, 72, 69];
+for (let bar = 0; bar < 4; bar++) {
+  const s = 10 + bar * 2, r = PROG[bar];
+  if (bar % 2 === 0) braam(s, 38 + r, false);
+  kick(s, 1); kick(s + .75, .8); kick(s + 1.25, .85); if (bar % 2) kick(s + 1.75, .7);
+  sub808(s, 26 + r, .7, 0); sub808(s + .75, 26 + r, .45, 0); sub808(s + 1.25, 26 + r, .7, bar === 3 ? 7 : -2);
+  clap(s + .5, .45); clap(s + 1.5, .5); snare(s + .5, .3); snare(s + 1.5, .3);
   for (let h = 0; h < 2; h += .125) hat(s + h, h % .25 ? .05 : .09);
-  if (bar === 2) for (let h = 1.5; h < 2; h += 1 / 24) hat(s + h, .08);
-  for (const n of [62, 65, 69]) tone(s, .2, midi(n + [0, 3, 5][bar]), { type: 'sq', v: .035, r: .15, decay: .15, send: .5 });
+  for (let h = 1.75; h < 2; h += 1 / 24) hat(s + h, .07);
+  hat(s + .875, .1, 1);
+  for (let i = 0; i < 16; i++) if (i % 4 !== 3 || bar % 2) cow(s + i * .125, MEL[(i + bar * 4) % 16] + r, .06);
+  stab(s, 50 + r); stab(s + .75, 50 + r, .045); stab(s + 1.25, 50 + r, .05);
 }
-// 19–24.3: босс, тяжелее и медленнее
-braam(19, 36, true);
-pad(19, 5.2, [36, 39, 43], .03);
-for (let b = 19; b < 24; b += 1) { kick(b, .9); sub808(b, 24, .7, 0); }
-for (let b = 20; b < 24; b += 2) clap(b, .5);
-for (let b = 19.5; b < 24; b += .5) for (const d of [0, .12]) tone(b + d, .1, x => 110 * Math.exp(-x * 6), { v: .25, r: .1, decay: .12 });
-for (let h = 19; h < 24; h += .25) hat(h, .06);
-riser(22.8, 1.5);
-// 24.3: финальный удар и хвост
-braam(24.3, 26, true); braam(24.3, 38, true);
-sub808(24.3, 26, 2.4, -7);
-pad(24.6, 5.4, [38, 45, 50, 53], .03);
-for (const [t, n] of [[25.2, 74], [25.8, 72], [26.4, 69]]) tone(t, 1.4, midi(n), { type: 'tri', v: .06, a: .01, r: 1.5, decay: 1.6, send: .8 });
-kick(27.6, .8); sub808(27.6, 26, 1.5, 0); noise(27.6, 1.8, { v: .2, cut: 6000, decay: .6, send: .5, wide: 1 });
+// 18–22: боссы — тяжелее, удар на каждую смену кадра
+braam(18, 36, true);
+pad(18, 4.2, [36, 39, 43], .03);
+for (let b = 18; b < 22; b += 1) { if (b > 18) braam(b, 36 + [0, 3, 5, 7][b - 18], false); kick(b, 1); kick(b + .5, .8); sub808(b, 24 + [0, 3, 5, 7][b - 18], .8, 0); clap(b + .5, .5); }
+for (let h = 18; h < 22; h += .125) hat(h, h % .25 ? .045 : .08);
+for (let i = 0; i < 32; i++) if (i % 2 === 0) cow(18 + i * .125, [72, 75, 72, 79][Math.floor(i / 8)], .045);
+// 22–24.5: разгон
+pad(22, 2.6, [38, 45, 50], .035);
+for (let b = 22; b < 24.5; b += .5) { kick(b, .9); sub808(b, 26, .4, 0); }
+for (let h = 22; h < 23.5; h += .25) snare(h, .22);
+for (let h = 23.5; h < 24.5; h += 1 / 16) snare(h, .16 + (h - 23.5) * .3);
+riser(22.3, 2.2);
+// 24.5: финальный удар и хвост
+braam(24.5, 26, true); braam(24.5, 38, true);
+sub808(24.5, 26, 2.4, -7);
+pad(24.8, 5.4, [38, 45, 50, 53], .03);
+for (const [t, n] of [[25.4, 74], [26, 72], [26.6, 69], [27.4, 74]]) tone(t, 1.4, midi(n), { type: 'tri', v: .06, a: .01, r: 1.5, decay: 1.6, send: .8 });
+kick(27.9, .8); sub808(27.9, 26, 1.5, 0); noise(27.9, 1.8, { v: .2, cut: 6000, decay: .6, send: .5, wide: 1 });
 
 // реверб: 4 гребёнки + 2 allpass по шине SEND
 const RL = new Float32Array(N), RRb = new Float32Array(N);

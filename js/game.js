@@ -2683,7 +2683,7 @@ window.GOC = {
   sc: () => SC, r3: () => R3, mdl: () => MDL, ms: r => mergeSkinned(r),
   perf: n => { const t = []; for (let i = 0; i < n; i++) { logic(1 / 60); const a = performance.now(); render(); t.push(performance.now() - a); } t.sort((a, b) => a - b); const r = R3.info.render, m = R3.info.memory; return { avg: +(t.reduce((a, b) => a + b, 0) / n).toFixed(2), p95: +t[Math.floor(n * .95)].toFixed(2), calls: r.calls, tris: r.triangles, geo: m.geometries, tex: m.textures, objs: (() => { let c = 0; SC.traverse(() => c++); return c; })(), load: window.__loadMs, bake: window.__bake }; },
   dbg: () => ({ cine: cine && { t: cine.t, k: cine.k || cine.type || 1 }, dcd: P.dcd, mode, camYaw, camPit, camD, bt, slowmo, hitstop, aim: P.aim, dodge: P.dodge, dvx: P.dvx, chg: P.chg, inv: P.inv, sw: P.swag, fsr: fs && [fs.room.x, fs.room.w, fs.room.cx], T, obsBad: obs.filter(b => !(b.r === b.r) || !(b.x === b.x)).length }),
-  lv: () => LV, ents: () => ents, interact: () => doInteract(),
+  lv: () => LV, ents: () => ents, interact: () => doInteract(), skip: () => { if (mode === 'dlg') endDlg(); }, roll: () => doDodge(),
   state: () => ({ mode, ch: S && S.ch, step: S && S.step, hp: P && P.hp, ens: ens.length, xp: S && S.xp, fs: !!fs, prompt, q: S && S.q, done: S && S.done, x: P && P.x, y: P && P.y }),
 };
 })();
