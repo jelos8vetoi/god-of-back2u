@@ -18,16 +18,33 @@ canvas{display:block;width:1280px;height:720px;cursor:crosshair}
 #c{position:absolute;left:0;top:0;background:transparent}
 .ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:5}
 .ov.on{display:flex}
-#menu{align-items:flex-start;padding:55px 72px;background:linear-gradient(90deg,#080e18f5 0%,#080e18d1 32%,#080e1840 62%,transparent 85%),linear-gradient(0deg,#080e18c0,transparent 28%)}
-#menu h1{margin:0;font-size:64px;letter-spacing:3px;text-shadow:0 4px 18px #03060c}
-#menu h1 span{color:#efbd79}
-#menu .tag{margin:12px 0 36px;color:#b8c5d5}
-#menu .row{display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:670px;gap:8px;margin-bottom:8px}
-#menu button{margin:0;padding:12px 16px;background:#142131e8;border-color:#57697d;transform:none;transition:background-color 150ms ease-out,border-color 150ms ease-out}
-#menu #bCont{color:#18120a;background:#efbd79;border-color:#efbd79}
-#menu button:focus-visible{outline:2px solid #fff;outline-offset:3px}
-@media (hover:hover){#menu button:hover:not(:disabled){background:#39516b;border-color:#efbd79}#menu #bCont:hover:not(:disabled){background:#ffda9f}}
-#menu .keys{max-width:520px;text-align:left}
+#menu{isolation:isolate;overflow:hidden;justify-content:flex-start;padding-top:84px;background:#201c18 url('assets/winter-menu.png') center/cover no-repeat}
+#menu::before,#menu::after{content:"";position:absolute;pointer-events:none;z-index:-1}
+#menu::before{inset:0;background:radial-gradient(ellipse at 50% 46%,#100d0966,transparent 63%),radial-gradient(ellipse 122px 90px at 86% 39%,#ffc47728,transparent)}
+#menu::after{inset:-128px -96px 0;background-image:radial-gradient(circle at 22px 37px,#e5d7bf90 1px,transparent 2px),radial-gradient(circle at 76px 114px,#e5d7bf60 1px,transparent 2px);background-size:96px 128px;opacity:.32}
+@media(prefers-reduced-motion:no-preference){
+  #menu::before{animation:winter-light 7s ease-in-out infinite alternate}
+  #menu::after{animation:winter-snow 8s linear infinite}
+}
+@keyframes winter-light{from{opacity:.7}to{opacity:1}}
+@keyframes winter-snow{to{transform:translate(96px,128px)}}
+#menu h1{margin:0;color:#ece4d7;font-size:72px;letter-spacing:2px;text-shadow:0 3px 12px #15110b}
+#menu h1 span{color:#c59a53}
+#menu .tag{margin:12px 0 75px;color:#d5cabc;font-size:16px;letter-spacing:5px}
+#menu .winter-actions{display:grid;justify-items:center;gap:7px}
+#menu button,#menu summary{box-sizing:border-box;width:355px;min-height:56px;margin:0;padding:14px;color:#eee2cf;background:transparent;border:1px solid transparent;transform:none;text-align:center;font:400 23px "Russo One","Segoe UI",sans-serif;text-transform:uppercase;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out}
+#menu #bCont{color:#ffdaa3;background:linear-gradient(90deg,transparent,#8b622e68,transparent);border-color:#9d794d80}
+#menu button:focus-visible,#menu summary:focus-visible{outline:2px solid #ffdaa3;outline-offset:2px}
+@media(hover:hover){#menu button:hover:not(:disabled),#menu summary:hover{background-color:#68502d80;border-color:#c9a171}}
+#menu summary{list-style:none}
+#menu summary::-webkit-details-marker{display:none}
+#menu details{position:relative}
+#menu .winter-difficulties{position:absolute;left:100%;top:0;display:grid;margin-left:12px;padding:4px;background:#201a14f5;border:1px solid #9d794d}
+#menu .winter-difficulties button{width:220px;font-size:17px;min-height:44px}
+#menu .small{position:absolute;bottom:20px;color:#d5cabc}
+#menu .keys{display:none}
+#menu > .row{margin-top:18px;display:flex;gap:12px}
+#menu > .row button{width:auto;min-height:36px;color:#d5cabc}
 h1{font-size:84px;letter-spacing:8px;font-weight:900;color:#fff;text-shadow:0 0 30px #f33,0 4px 0 #700}
 h1 span{color:#ff3b3b}
 .tag{letter-spacing:6px;color:#9fb0c8;margin:8px 0 34px;font-size:15px;text-transform:uppercase}
@@ -121,11 +138,18 @@ button:disabled{opacity:.35;cursor:default}
   <div id="menu" class="ov on">
     <h1>GOD <span>OF</span> GRIMERKA</h1>
     <div class="tag">сага о Пахане, кенте и девяти серверах</div>
-    <div class="row"><button id="bCont">Продолжить</button><button id="bSettings">Настройки</button></div>
-    <div class="row">
-      <button data-d="0">Новая игра · Изи</button>
-      <button data-d="1">Новая игра · Норм</button>
-      <button data-d="2">Новая игра · Андеграунд</button>
+    <div class="winter-actions">
+      <button id="bCont">Продолжить</button>
+      <details id="winterNewGame">
+        <summary>Новая игра</summary>
+        <div class="winter-difficulties">
+          <button data-d="0">Изи</button>
+          <button data-d="1">Норм</button>
+          <button data-d="2">Андеграунд</button>
+        </div>
+      </details>
+      <button id="bSettings">Настройки</button>
+      <button id="bExit">Выход</button>
     </div>
     <div class="keys">
       <span><b>WASD</b> — движение</span><span><b>ЛКМ / ПКМ</b> — лёгкий / тяжёлый (держи ПКМ — заряд)</span>

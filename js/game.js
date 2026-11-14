@@ -1367,7 +1367,7 @@ function wallTex(k) {
   }
   { const tq = new T3.CanvasTexture(c); tq.encoding = T3.sRGBEncoding; return tq; }
 }
-let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [], indoorLightMix = 0;
+let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [], indoorLightMix = 0;
 const ENVC = {
   snow: { sun: '#9db4ff', si: .55, hs: '#8fa6d8', hg: '#1a1c2a', hi: .75, pt: ['#ffffff', 5, -60, 25, 420] },
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
@@ -1396,56 +1396,6 @@ function ult() {
   for (let i = 0; i < 26; i++) { const a = i / 26 * TAU; burst(P.x + Math.cos(a) * 200, P.y + Math.sin(a) * 200, WP[w].col, 4); }
   timers.push({ t: .12, f: () => { for (const e of ens) if (!e.dead && e.spawn <= 0 && dist(e, P) < 620) dmgE(e, 110 * dmgMul(w), { w, kb: 700, stun: 1.2, heavy: true, sm: .08 }); } });
   styleAdd(1);
-}
-const menuMotion = matchMedia('(prefers-reduced-motion: no-preference)');
-let menuSnow, menuLamp;
-function menuScene(now, fdt) {
-  if (!R3) init3d();
-  if (!menuMotion.matches) { now = 0; fdt = 0; }
-  if (!MSC) {
-    MSC = new T3.Scene(); MSC.background = new T3.Color('#162336'); MSC.fog = new T3.Fog('#162336', 500, 1700);
-    MSC.add(new T3.HemisphereLight('#a3c5ff', '#26384e', 1.2));
-    MSC.add(box(2400, 8, 1800, '#52667f', 0, -5, -240));
-    MSC.add(box(420, 2, 1600, '#263448', 95, 0, -220));
-    for (let i = 0; i < 7; i++) {
-      const x = (i - 3) * 208, z = -480 - (i % 3) * 100, height = 240 + (i % 3) * 45;
-      MSC.add(box(194, height, 165, i % 2 ? '#545b63' : '#555d6e', x, height / 2, z));
-      MSC.add(box(202, 12, 172, '#9cb3c8', x, height, z));
-      for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) {
-        const lit = (i * 13 + row * 7 + col * 3) % 11 < 3;
-        MSC.add(box(25, 33, 3, lit ? '#cba374' : '#263647', x + col * 43 - 65, 42 + row * 48, z + 84,
-          lit ? { emissive: '#ffc279', emissiveIntensity: .65 } : undefined));
-      }
-    }
-    for (let i = 0; i < 16; i++) {
-      const bank = sph(1, '#b7cee4', i % 2 ? 330 : -150, -4, 460 - i * 68);
-      bank.scale.set(48 + i % 4 * 15, 11 + i % 3 * 6, 72);
-      MSC.add(bank);
-    }
-    MSC.add(box(7, 190, 7, '#303945', 265, 95, -100));
-    MSC.add(box(45, 7, 10, '#43454a', 244, 188, -100));
-    menuLamp = glowS('#ffc479', 180); menuLamp.position.set(222, 186, -98); MSC.add(menuLamp);
-    const lamp = new T3.PointLight('#ffbd72', 2.8, 450, 2);
-    lamp.position.set(222, 179, -100); MSC.add(lamp);
-    const geometry = new T3.BufferGeometry();
-    geometry.setAttribute('position', new T3.BufferAttribute(new Float32Array(240 * 3), 3));
-    menuSnow = Array.from({ length: 240 }, () => [rnd(-680, 680), rnd(0, 410), rnd(-750, 410), rnd(24, 67)]);
-    MSC.add(new T3.Points(geometry, new T3.PointsMaterial({ color: '#e1edff', size: 3.2, transparent: true, opacity: .68, depthWrite: false })));
-    MSC.userData.snowPositions = geometry.attributes.position;
-  }
-  if (!MSH && MDL.vanek && mdlDone >= mdlTot) { MSH = inst('vanek', 120, { tint: '#4a4d5a', mix: .5 }); MSH.traverse(o => { if (/^handslot.?r$/i.test(o.name)) o.add(handWeapons().bat); }); MSH.rotation.y = -1.2; play(MSH, 'bi'); MSC.add(MSH); }
-  if (!MSK && MDL.kent && mdlDone >= mdlTot) { MSK = inst('kent', 104, { tint: '#bfe6ff', mix: .3 }); MSK.position.set(-40, 0, 95); MSK.rotation.y = -1.5; MSC.add(MSK); }
-  if (MSH) MSH.userData.mx.update(fdt); if (MSK) MSK.userData.mx.update(fdt);
-  const positions = MSC.userData.snowPositions;
-  menuSnow.forEach(([x, y, z, speed], i) => {
-    positions.setXYZ(i, x + 22 * Math.sin(now * .6 + z), ((y - now * speed) % 410 + 410) % 410, z);
-  });
-  positions.needsUpdate = true;
-  menuLamp.material.opacity = .78 + .08 * Math.sin(now * 1.1);
-  CAM.fov = 48; CAM.updateProjectionMatrix();
-  CAM.position.set(115 + Math.sin(now * .17) * 25, 115, 440);
-  CAM.lookAt(-150, 95, -220);
-  draw(MSC);
 }
 function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function floorTex(k) {
@@ -2200,7 +2150,7 @@ function teleDecals(e) {
 function render() {
   if (R3) R3.info.reset();
   X.setTransform(C.width / W, 0, 0, C.height / H, 0, 0); X.clearRect(0, 0, W, H);
-  if (T3 && (!S || !P || mode === 'menu')) { const nw = window.__clock != null ? window.__clock : performance.now() / 1000, fd = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? nw - lastNow : 0); lastNow = nw; menuScene(nw, fd); return; }
+  if (!S || !P || mode === 'menu') { lastNow = 0; return; }
   if (!S || !P || !T3) return;
   if (!R3) init3d();
   const th = CH[Math.min(S.ch, CH.length - 1)].th, now = window.__clock != null ? window.__clock : performance.now() / 1000, fdt = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
@@ -2721,6 +2671,10 @@ function closeSettings() {
   show(settingsFrom, true);
 }
 $('bSettings').addEventListener('click', openSettings);
+$('bExit').addEventListener('click', () => {
+  window.close();
+  toast('Чтобы выйти, закрой вкладку игры.');
+});
 $('pSettings').addEventListener('click', openSettings);
 $('settingsBack').addEventListener('click', closeSettings);
 $('oSens').value = OPT.sens; $('oVol').value = OPT.vol; $('oQ').value = OPT.q; $('oVoice').value = OPT.voice; applyQ();
