@@ -949,6 +949,11 @@ function updPlayer(dt) {
     if (tg) { const an = ang(comp, tg); prj.push({ from: 'p', note: 1, x: comp.x, y: comp.y, vx: Math.cos(an) * 620, vy: Math.sin(an) * 620, r: 9, dmg: 9 * dmgMul() * (1 + S.comp * .25), life: 1, hit: new Set(), col: '#5cd0ff', rot: 0 }); tone(880, .08, 'triangle', .07, 1320); }
   }
   pushOut(comp, 10); if (!okPos(comp.x, comp.y, 12)) { comp.x = P.x; comp.y = P.y; }
+  const closedDoor = ents.find(o => o.k === 'frontDoor' && !o.open);
+  if (closedDoor) {
+    comp.x = Math.min(comp.x, closedDoor.x - 28);
+    P.x = Math.min(P.x, closedDoor.x - P.r - 8);
+  }
   if (comp.sayT > 0) comp.sayT -= dt;
 }
 
@@ -1433,15 +1438,22 @@ function buildWorld(th) {
     for (const dz of [-160, 160]) {
       vestibule.add(box(18, 180, 100, '#586052', r.x + r.w - 8, 90, r.cy + dz));
     }
-    vestibule.add(box(18, 55, 220, '#7b7364', r.x + r.w - 8, 153, r.cy));
+    vestibule.add(box(28, 70, 224, '#7b7364', r.x + r.w - 12, 150, r.cy));
+    for (const offset of [-108, 108]) {
+      vestibule.add(box(30, 124, 12, '#373c32', r.x + r.w - 14, 62, r.cy + offset));
+    }
+    vestibule.add(box(30, 10, 224, '#373c32', r.x + r.w - 14, 120, r.cy));
     for (const dx of [-250, 170]) {
       vestibule.add(box(86, 133, 12, '#3d3026', r.cx + dx, 67, r.y + r.h - 24));
       vestibule.add(box(8, 5, 8, '#a18c58', r.cx + dx + 30, 61, r.y + r.h - 33));
     }
     for (let i = 0; i < 8; i++) {
       vestibule.add(box(120, 10 + i * 13, 22, '#666057', r.x + 90, (10 + i * 13) / 2, r.y + 40 + i * 22));
-      vestibule.add(box(4, 85, 4, '#383c36', r.x + 155, 45 + i * 13, r.y + 40 + i * 22));
+      vestibule.add(box(4, 55, 4, '#383c36', r.x + 155, 37.5 + i * 13, r.y + 40 + i * 22));
     }
+    const rail = box(8, 8, Math.hypot(154, 91) + 8, '#383c36', r.x + 155, 110.5, r.y + 117);
+    rail.rotation.x = -Math.atan2(91, 154);
+    vestibule.add(rail);
     for (let i = 0; i < 48; i++) {
       const x = r.x + 35 + (i * 137 % (r.w - 70));
       const y = 20 + i * 19 % 140;
@@ -2216,7 +2228,7 @@ function render() {
     PTI.count = n; PTI.instanceMatrix.needsUpdate = true; PTI.instanceColor.needsUpdate = true; }
   for (const b of bolts) { const m = use('bolt', () => new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial())); const L = Math.hypot(b.x2 - b.x1, b.y2 - b.y1); m.position.set((b.x1 + b.x2) / 2, 26 + rnd(-4, 4), (b.y1 + b.y2) / 2); m.scale.set(L, 4, 4); m.rotation.y = -Math.atan2(b.y2 - b.y1, b.x2 - b.x1); m.material.color.set(b.c); }
   if (SKYM) SKYM.position.set(P.x, 0, P.y);
-  for (const q of glows) { q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = clamp((d - 90) / 160, 0, 1); }
+  for (const q of glows) { q.visible = !indoors; q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = clamp((d - 90) / 160, 0, 1); }
   { const dk = fs && !fs.done && fs.mut === 'dark', fg = SC.fog; fg.near += ((dk ? 90 : 450) - fg.near) * .08; fg.far += ((dk ? 560 : 2100) - fg.far) * .08; }
   for (const w of waves) { dRing(w.x, w.y, w.r, w.c, .95); dRing(w.x, w.y, w.r - 12, '#ffffff', .6); dRing(w.x, w.y, w.r + 12, '#ff2020', .7); }
   for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
