@@ -18,8 +18,16 @@ canvas{display:block;width:1280px;height:720px;cursor:crosshair}
 #c{position:absolute;left:0;top:0;background:transparent}
 .ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:5}
 .ov.on{display:flex}
-#menu{background:radial-gradient(ellipse at 50% 40%,rgba(10,4,6,.15) 0%,rgba(5,5,8,.82) 75%);justify-content:flex-end;padding-bottom:26px}
-#menu h1{margin-top:auto;margin-bottom:0;position:absolute;top:46px}#menu .tag{position:absolute;top:150px}
+#menu{align-items:flex-start;padding:55px 72px;background:linear-gradient(90deg,#080e18f5 0%,#080e18d1 32%,#080e1840 62%,transparent 85%),linear-gradient(0deg,#080e18c0,transparent 28%)}
+#menu h1{margin:0;font-size:64px;letter-spacing:3px;text-shadow:0 4px 18px #03060c}
+#menu h1 span{color:#efbd79}
+#menu .tag{margin:12px 0 36px;color:#b8c5d5}
+#menu .row{display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:670px;gap:8px;margin-bottom:8px}
+#menu button{margin:0;padding:12px 16px;background:#142131e8;border-color:#57697d;transform:none;transition:background-color 150ms ease-out,border-color 150ms ease-out}
+#menu #bCont{color:#18120a;background:#efbd79;border-color:#efbd79}
+#menu button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media (hover:hover){#menu button:hover:not(:disabled){background:#39516b;border-color:#efbd79}#menu #bCont:hover:not(:disabled){background:#ffda9f}}
+#menu .keys{max-width:520px;text-align:left}
 h1{font-size:84px;letter-spacing:8px;font-weight:900;color:#fff;text-shadow:0 0 30px #f33,0 4px 0 #700}
 h1 span{color:#ff3b3b}
 .tag{letter-spacing:6px;color:#9fb0c8;margin:8px 0 34px;font-size:15px;text-transform:uppercase}

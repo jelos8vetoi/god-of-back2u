@@ -1397,21 +1397,55 @@ function ult() {
   timers.push({ t: .12, f: () => { for (const e of ens) if (!e.dead && e.spawn <= 0 && dist(e, P) < 620) dmgE(e, 110 * dmgMul(w), { w, kb: 700, stun: 1.2, heavy: true, sm: .08 }); } });
   styleAdd(1);
 }
+const menuMotion = matchMedia('(prefers-reduced-motion: no-preference)');
+let menuSnow, menuLamp;
 function menuScene(now, fdt) {
   if (!R3) init3d();
+  if (!menuMotion.matches) { now = 0; fdt = 0; }
   if (!MSC) {
-    MSC = new T3.Scene(); MSC.background = new T3.Color('#050508'); MSC.fog = new T3.Fog('#050508', 320, 900);
-    MSC.add(new T3.HemisphereLight('#ff8a7a', '#0a0a18', .9)); const dl = new T3.DirectionalLight('#ffffff', 1.3); dl.position.set(220, 320, 120); MSC.add(dl);
-    const rl = new T3.PointLight('#ff2a2a', 3, 600, 2); rl.position.set(-120, 90, -140); MSC.add(rl);
-    MSC.add(mesh(new T3.CircleGeometry(520, 48).rotateX(-Math.PI / 2), new T3.MeshStandardMaterial({ color: '#0c0a0e', roughness: .35, metalness: .4 })));
-    const rg = new T3.Mesh(new T3.RingGeometry(150, 158, 64).rotateX(-Math.PI / 2), new T3.MeshBasicMaterial({ color: '#ff3b3b' })); rg.position.y = 1; MSC.add(rg);
-    const gs = glowS('#ff2a2a', 700); gs.position.set(0, 120, -60); MSC.add(gs);
+    MSC = new T3.Scene(); MSC.background = new T3.Color('#162336'); MSC.fog = new T3.Fog('#162336', 500, 1700);
+    MSC.add(new T3.HemisphereLight('#a3c5ff', '#26384e', 1.2));
+    MSC.add(box(2400, 8, 1800, '#52667f', 0, -5, -240));
+    MSC.add(box(420, 2, 1600, '#263448', 95, 0, -220));
+    for (let i = 0; i < 7; i++) {
+      const x = (i - 3) * 208, z = -480 - (i % 3) * 100, height = 240 + (i % 3) * 45;
+      MSC.add(box(194, height, 165, i % 2 ? '#545b63' : '#555d6e', x, height / 2, z));
+      MSC.add(box(202, 12, 172, '#9cb3c8', x, height, z));
+      for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) {
+        const lit = (i * 13 + row * 7 + col * 3) % 11 < 3;
+        MSC.add(box(25, 33, 3, lit ? '#cba374' : '#263647', x + col * 43 - 65, 42 + row * 48, z + 84,
+          lit ? { emissive: '#ffc279', emissiveIntensity: .65 } : undefined));
+      }
+    }
+    for (let i = 0; i < 16; i++) {
+      const bank = sph(1, '#b7cee4', i % 2 ? 330 : -150, -4, 460 - i * 68);
+      bank.scale.set(48 + i % 4 * 15, 11 + i % 3 * 6, 72);
+      MSC.add(bank);
+    }
+    MSC.add(box(7, 190, 7, '#303945', 265, 95, -100));
+    MSC.add(box(45, 7, 10, '#43454a', 244, 188, -100));
+    menuLamp = glowS('#ffc479', 180); menuLamp.position.set(222, 186, -98); MSC.add(menuLamp);
+    const lamp = new T3.PointLight('#ffbd72', 2.8, 450, 2);
+    lamp.position.set(222, 179, -100); MSC.add(lamp);
+    const geometry = new T3.BufferGeometry();
+    geometry.setAttribute('position', new T3.BufferAttribute(new Float32Array(240 * 3), 3));
+    menuSnow = Array.from({ length: 240 }, () => [rnd(-680, 680), rnd(0, 410), rnd(-750, 410), rnd(24, 67)]);
+    MSC.add(new T3.Points(geometry, new T3.PointsMaterial({ color: '#e1edff', size: 3.2, transparent: true, opacity: .68, depthWrite: false })));
+    MSC.userData.snowPositions = geometry.attributes.position;
   }
   if (!MSH && MDL.vanek && mdlDone >= mdlTot) { MSH = inst('vanek', 120, { tint: '#4a4d5a', mix: .5 }); MSH.traverse(o => { if (/^handslot.?r$/i.test(o.name)) o.add(handWeapons().bat); }); MSH.rotation.y = -1.2; play(MSH, 'bi'); MSC.add(MSH); }
   if (!MSK && MDL.kent && mdlDone >= mdlTot) { MSK = inst('kent', 104, { tint: '#bfe6ff', mix: .3 }); MSK.position.set(-40, 0, 95); MSK.rotation.y = -1.5; MSC.add(MSK); }
   if (MSH) MSH.userData.mx.update(fdt); if (MSK) MSK.userData.mx.update(fdt);
-  const a = Math.sin(now * .22) * .55 + .35; CAM.fov = 42; CAM.updateProjectionMatrix();
-  CAM.position.set(Math.cos(a) * 330, 105 + Math.sin(now * .4) * 8, Math.sin(a) * 330 + 40); CAM.lookAt(0, 62, 30); draw(MSC);
+  const positions = MSC.userData.snowPositions;
+  menuSnow.forEach(([x, y, z, speed], i) => {
+    positions.setXYZ(i, x + 22 * Math.sin(now * .6 + z), ((y - now * speed) % 410 + 410) % 410, z);
+  });
+  positions.needsUpdate = true;
+  menuLamp.material.opacity = .78 + .08 * Math.sin(now * 1.1);
+  CAM.fov = 48; CAM.updateProjectionMatrix();
+  CAM.position.set(115 + Math.sin(now * .17) * 25, 115, 440);
+  CAM.lookAt(-150, 95, -220);
+  draw(MSC);
 }
 function cnv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function floorTex(k) {
