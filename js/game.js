@@ -1332,7 +1332,7 @@ function wallTex(k) {
   }
   { const tq = new T3.CanvasTexture(c); tq.encoding = T3.sRGBEncoding; return tq; }
 }
-let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [];
+let PPC = null, RP = null, FXA = null, hfx = [], marks = [], punch = 0, FL = null, cine = null, banners = [], MSC = null, MSH = null, MSK = null, HEMI = null, SKYM = null, AMB = null, ambD = null, movers = [], indoorLightMix = 0;
 const ENVC = {
   snow: { sun: '#9db4ff', si: .55, hs: '#8fa6d8', hg: '#1a1c2a', hi: .75, pt: ['#ffffff', 5, -60, 25, 420] },
   basement: { sun: '#ffcf9a', si: .6, hs: '#d8b48a', hg: '#1a120c', hi: .6, pt: ['#c9a36b', 3, -6, 8, 160] },
@@ -2132,12 +2132,21 @@ function render() {
   CAM.updateMatrixWorld();
   const entrance = LV.main[0];
   const indoors = S.ch === 0 && inR(entrance, P.x, P.y, 0);
-  if (AMB) AMB.visible = !indoors;
   const environment = ENVC[th.deco] || ENVC.snow;
-  SUN.intensity = indoors ? .025 : environment.si;
-  if (HEMI) HEMI.intensity = indoors ? .09 : environment.hi;
+  // Daylight enters through the open front door. Fade it across the last part of
+  // the vestibule and the first steps outside instead of switching at its bounds.
+  const indoorTarget = S.ch === 0
+    ? clamp((entrance.x + entrance.w + 80 - P.x) / 220, 0, 1)
+    : 0;
+  indoorLightMix += (indoorTarget - indoorLightMix) * (1 - Math.exp(-fdt * 5));
+  if (AMB) {
+    AMB.visible = indoorLightMix < .98;
+    AMB.material.opacity = .85 * (1 - indoorLightMix);
+  }
+  SUN.intensity = environment.si + (.025 - environment.si) * indoorLightMix;
+  if (HEMI) HEMI.intensity = environment.hi + (.09 - environment.hi) * indoorLightMix;
   for (const light of SC.children) {
-    if (light.isDirectionalLight && light !== SUN) light.intensity = indoors ? .025 : .45;
+    if (light.isDirectionalLight && light !== SUN) light.intensity = .45 + (.025 - .45) * indoorLightMix;
   }
   if (indoors) {
     if (mode === 'dlg' && S.step === 0) {
@@ -2288,7 +2297,7 @@ function render() {
     PTI.count = n; PTI.instanceMatrix.needsUpdate = true; PTI.instanceColor.needsUpdate = true; }
   for (const b of bolts) { const m = use('bolt', () => new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial())); const L = Math.hypot(b.x2 - b.x1, b.y2 - b.y1); m.position.set((b.x1 + b.x2) / 2, 26 + rnd(-4, 4), (b.y1 + b.y2) / 2); m.scale.set(L, 4, 4); m.rotation.y = -Math.atan2(b.y2 - b.y1, b.x2 - b.x1); m.material.color.set(b.c); }
   if (SKYM) SKYM.position.set(P.x, 0, P.y);
-  for (const q of glows) { q.visible = !indoors; q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = clamp((d - 90) / 160, 0, 1); }
+  for (const q of glows) { q.visible = indoorLightMix < .98; q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = clamp((d - 90) / 160, 0, 1) * (1 - indoorLightMix); }
   { const dk = fs && !fs.done && fs.mut === 'dark', fg = SC.fog; fg.near += ((dk ? 90 : 450) - fg.near) * .08; fg.far += ((dk ? 560 : 2100) - fg.far) * .08; }
   for (const w of waves) { dRing(w.x, w.y, w.r, w.c, .95); dRing(w.x, w.y, w.r - 12, '#ffffff', .6); dRing(w.x, w.y, w.r + 12, '#ff2020', .7); }
   for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
