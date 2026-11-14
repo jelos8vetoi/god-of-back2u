@@ -1411,6 +1411,7 @@ function skyTex(k, hor) {
 }
 function buildWorld(th) {
   if (worldG) SC.remove(worldG); worldG = new T3.Group(); SC.add(worldG); spinners = []; statics = []; movers = []; glows = [];
+  indoorLightMix = S.ch === 0 ? 1 : 0;
   const k = th.deco, ev = ENVC[k] || ENVC.snow, bg = new T3.Color(th.bg), hor = bg.clone().lerp(new T3.Color(ev.hs), .22), horS = '#' + hor.getHexString();
   SC.background = hor; SC.fog = new T3.Fog(hor.clone().convertSRGBToLinear(), 450, 2100);
   SUN.color.set(ev.sun); SUN.intensity = ev.si; if (HEMI) { HEMI.color.set(ev.hs); HEMI.groundColor.set(ev.hg); HEMI.intensity = ev.hi; }
@@ -1494,7 +1495,10 @@ function buildWorld(th) {
     house.name = 'TomskStartHouse';
     const front = r.x + r.w + 9;
     const add = (w, h, d, c, x, y, z, o) => house.add(box(w, h, d, c, x, y, z, o));
-    add(r.w + 20, 620, r.h + 24, '#777865', r.cx, 510, r.cy);
+    // Keep the ground floor hollow: a solid building block lets the camera and
+    // characters enter its faces. The vestibule below is the actual interior.
+    add(18, 620, r.h + 24, '#777865', r.x - 9, 510, r.cy);
+    for (const z of [r.y - 9, r.y + r.h + 9]) add(r.w + 20, 620, 18, '#777865', r.cx, 510, z);
     // Front panels and recessed windows face the courtyard (+X).
     for (let floor = 0; floor < 5; floor++) {
       const base = floor * 160;
@@ -2126,22 +2130,25 @@ function render() {
   const sx = shake ? rnd(-shake, shake) * .5 : 0, sy = shake ? rnd(-shake, shake) * .5 : 0, fo = P.fin ? Math.sin(clamp(P.fin.el / P.fin.tot, 0, 1) * Math.PI) : 0, cyw = camYaw + fo * .6, fx = Math.cos(cyw), fz = Math.sin(cyw), cd0 = 270 - fo * 120;
   let cdn = cd0; for (let t = 30; t <= cd0; t += 20) if (!okPos(P.x - fx * t, P.y - fz * t, 12)) { cdn = t - 20; break; }
   camD += (Math.max(40, cdn) - camD) * .2;
-  { const kk = camD / cd0, hh = 60 + 330 * camPit; CAM.position.set(P.x - fx * camD - fz * 22 + sx, 44 + (hh - 44) * (.35 + .65 * kk) + sy, P.y - fz * camD + fx * 22); if (P.fin) CAM.lookAt((P.x + P.fin.e.x) / 2, 40, (P.y + P.fin.e.y) / 2); else CAM.lookAt(P.x + fx * 130, 38, P.y + fz * 130);
+  { const kk = camD / cd0, normalH = 60 + 330 * camPit, startRoom = LV.main[0], outerDoorX = startRoom.x + startRoom.w;
+    const exitCamMix = S.ch === 0 ? clamp((P.x - outerDoorX - 35) / 260, 0, 1) : 1;
+    const hh = 72 + (normalH - 72) * exitCamMix;
+    CAM.position.set(P.x - fx * camD - fz * 22 + sx, 44 + (hh - 44) * (.35 + .65 * kk) + sy, P.y - fz * camD + fx * 22); if (P.fin) CAM.lookAt((P.x + P.fin.e.x) / 2, 40, (P.y + P.fin.e.y) / 2); else CAM.lookAt(P.x + fx * 130, 38, P.y + fz * 130);
     const fv = 56 - fo * 13; if (Math.abs(CAM.fov - fv) > .05) { CAM.fov = fv; CAM.updateProjectionMatrix(); } }
   if (cine) { const b = cine.e, ca = camYaw + Math.PI + .5 - cine.t * .28, cd = 330 - cine.t * 45; CAM.position.set(b.x + Math.cos(ca) * cd, 70 + b.r * 1.2, b.y + Math.sin(ca) * cd); CAM.lookAt(b.x, b.r * 2.3, b.y); if (CAM.fov !== 44) { CAM.fov = 44; CAM.updateProjectionMatrix(); } }
   CAM.updateMatrixWorld();
   const entrance = LV.main[0];
   const indoors = S.ch === 0 && inR(entrance, P.x, P.y, 0);
   const environment = ENVC[th.deco] || ENVC.snow;
-  // Daylight enters through the open front door. Fade it across the last part of
-  // the vestibule and the first steps outside instead of switching at its bounds.
-  const indoorTarget = S.ch === 0
-    ? clamp((entrance.x + entrance.w + 80 - P.x) / 220, 0, 1)
-    : 0;
+  // Keep interior lighting and weather until the player has crossed the outer
+  // threshold. Only then fade to the courtyard lighting.
+  const outerThreshold = entrance.x + entrance.w + 45;
+  const outside = S.ch !== 0 || P.x > outerThreshold;
+  const indoorTarget = S.ch === 0 && !outside ? 1 : 0;
   indoorLightMix += (indoorTarget - indoorLightMix) * (1 - Math.exp(-fdt * 5));
   if (AMB) {
-    AMB.visible = indoorLightMix < .98;
-    AMB.material.opacity = .85 * (1 - indoorLightMix);
+    AMB.visible = outside;
+    AMB.material.opacity = outside ? .85 : 0;
   }
   SUN.intensity = environment.si + (.025 - environment.si) * indoorLightMix;
   if (HEMI) HEMI.intensity = environment.hi + (.09 - environment.hi) * indoorLightMix;
@@ -2297,7 +2304,7 @@ function render() {
     PTI.count = n; PTI.instanceMatrix.needsUpdate = true; PTI.instanceColor.needsUpdate = true; }
   for (const b of bolts) { const m = use('bolt', () => new T3.Mesh(G('box', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial())); const L = Math.hypot(b.x2 - b.x1, b.y2 - b.y1); m.position.set((b.x1 + b.x2) / 2, 26 + rnd(-4, 4), (b.y1 + b.y2) / 2); m.scale.set(L, 4, 4); m.rotation.y = -Math.atan2(b.y2 - b.y1, b.x2 - b.x1); m.material.color.set(b.c); }
   if (SKYM) SKYM.position.set(P.x, 0, P.y);
-  for (const q of glows) { q.visible = indoorLightMix < .98; q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = clamp((d - 90) / 160, 0, 1) * (1 - indoorLightMix); }
+  for (const q of glows) { q.visible = outside; q.getWorldPosition(v3); const d = v3.distanceTo(CAM.position); q.material.opacity = outside ? clamp((d - 90) / 160, 0, 1) : 0; }
   { const dk = fs && !fs.done && fs.mut === 'dark', fg = SC.fog; fg.near += ((dk ? 90 : 450) - fg.near) * .08; fg.far += ((dk ? 560 : 2100) - fg.far) * .08; }
   for (const w of waves) { dRing(w.x, w.y, w.r, w.c, .95); dRing(w.x, w.y, w.r - 12, '#ffffff', .6); dRing(w.x, w.y, w.r + 12, '#ff2020', .7); }
   for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
