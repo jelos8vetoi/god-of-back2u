@@ -2147,20 +2147,29 @@ function render() {
   if (!R3) init3d();
   const th = CH[Math.min(S.ch, CH.length - 1)].th, now = window.__clock != null ? window.__clock : performance.now() / 1000, fdt = window.__clock != null ? 1 / 30 : Math.min(.05, lastNow ? now - lastNow : 0); lastNow = now;
   if (builtDeco !== deco) { builtDeco = deco; buildWorld(th); }
+  const entrance = LV.main[0];
+  const indoors = S.ch === 0 && inR(entrance, P.x, P.y, 0);
+  const doorX = entrance.x + entrance.w;
   // камера
   punch *= Math.pow(.004, fdt); { const bf = 56 + punch; if (!cine && !P.fin && Math.abs(CAM.fov - bf) > .05) { CAM.fov = bf; CAM.updateProjectionMatrix(); } }
   const sx = shake ? rnd(-shake, shake) * .5 : 0, sy = shake ? rnd(-shake, shake) * .5 : 0, fo = P.fin ? Math.sin(clamp(P.fin.el / P.fin.tot, 0, 1) * Math.PI) : 0, cyw = camYaw + fo * .6, fx = Math.cos(cyw), fz = Math.sin(cyw), cd0 = 270 - fo * 120;
   let cdn = cd0; for (let t = 30; t <= cd0; t += 20) if (!okPos(P.x - fx * t, P.y - fz * t, 12)) { cdn = t - 20; break; }
   camD += (Math.max(40, cdn) - camD) * .2;
-  { const kk = camD / cd0, normalH = 60 + 330 * camPit, startRoom = LV.main[0], outerDoorX = startRoom.x + startRoom.w;
-    const exitCamMix = S.ch === 0 ? clamp((P.x - outerDoorX - 35) / 260, 0, 1) : 1;
-    const hh = 72 + (normalH - 72) * exitCamMix;
-    CAM.position.set(P.x - fx * camD - fz * 22 + sx, 44 + (hh - 44) * (.35 + .65 * kk) + sy, P.y - fz * camD + fx * 22); if (P.fin) CAM.lookAt((P.x + P.fin.e.x) / 2, 40, (P.y + P.fin.e.y) / 2); else CAM.lookAt(P.x + fx * 130, 38, P.y + fz * 130);
-    const fv = 56 - fo * 13; if (Math.abs(CAM.fov - fv) > .05) { CAM.fov = fv; CAM.updateProjectionMatrix(); } }
+  {
+    // Allow room for both the canopy and the camera boom before raising the view.
+    const clearance = S.ch === 0 ? clamp((P.x - doorX - 200) / 220, 0, 1) : 1;
+    const blend = clearance * clearance * (3 - 2 * clearance);
+    const distance = 105 + (camD - 105) * blend;
+    const outdoorHeight = 44 + (16 + 330 * camPit) * (.35 + .65 * camD / cd0);
+    CAM.position.set(P.x - fx * distance + (sx - fz * 22) * blend,
+      72 + (outdoorHeight + sy - 72) * blend, P.y - fz * distance + fx * 22 * blend);
+    if (P.fin) CAM.lookAt((P.x + P.fin.e.x) / 2, 40, (P.y + P.fin.e.y) / 2);
+    else CAM.lookAt(P.x + fx * 100, 48 - 10 * blend, P.y + fz * 100);
+    const fv = 65 + (56 - fo * 13 - 65) * blend;
+    if (Math.abs(CAM.fov - fv) > .05) { CAM.fov = fv; CAM.updateProjectionMatrix(); }
+  }
   if (cine) { const b = cine.e, ca = camYaw + Math.PI + .5 - cine.t * .28, cd = 330 - cine.t * 45; CAM.position.set(b.x + Math.cos(ca) * cd, 70 + b.r * 1.2, b.y + Math.sin(ca) * cd); CAM.lookAt(b.x, b.r * 2.3, b.y); if (CAM.fov !== 44) { CAM.fov = 44; CAM.updateProjectionMatrix(); } }
   CAM.updateMatrixWorld();
-  const entrance = LV.main[0];
-  const indoors = S.ch === 0 && inR(entrance, P.x, P.y, 0);
   const environment = ENVC[th.deco] || ENVC.snow;
   // Keep interior lighting and weather until the player has crossed the outer
   // threshold. Only then fade to the courtyard lighting.
@@ -2177,19 +2186,13 @@ function render() {
   for (const light of SC.children) {
     if (light.isDirectionalLight && light !== SUN) light.intensity = .45 + (.025 - .45) * indoorLightMix;
   }
-  if (indoors) {
-    if (mode === 'dlg' && S.step === 0) {
+  if (indoors && mode === 'dlg' && S.step === 0) {
       const speaker = dq[di]?.split('|')[0];
       const subject = speaker === 'M' ? comp : P;
       const other = speaker === 'M' ? P : comp;
       const angle = Math.atan2(other.y - subject.y, other.x - subject.x);
       CAM.position.set(subject.x + Math.cos(angle + .55) * 110, 63, subject.y + Math.sin(angle + .55) * 110);
       CAM.lookAt(subject.x, 49, subject.y);
-    } else {
-      CAM.position.set(clamp(P.x - fx * 105, entrance.x + 25, entrance.x + entrance.w - 25),
-        72, clamp(P.y - fz * 105, entrance.y + 25, entrance.y + entrance.h - 25));
-      CAM.lookAt(P.x + fx * 100, 48, P.y + fz * 100);
-    }
     CAM.fov = 65;
     CAM.updateProjectionMatrix();
     CAM.updateMatrixWorld();
