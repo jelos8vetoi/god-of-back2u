@@ -930,9 +930,9 @@ function doDodge() {
   if (P.dcd > 0 || P.dodge > 0) return;
   let [mx, my] = inputDir();
   if (!mx && !my) { mx = Math.cos(P.aim); my = Math.sin(P.aim); }
-  const l = Math.hypot(mx, my); P.dvx = mx / l * 460; P.dvy = my / l * 460;
+  const l = Math.hypot(mx, my); P.dvx = mx / l * (174.8 / .52); P.dvy = my / l * (174.8 / .52);
   { let rl = Math.atan2(my, mx) - P.aim; while (rl > Math.PI) rl -= TAU; while (rl < -Math.PI) rl += TAU; P.drl = rl; P.dk = Math.abs(rl) < .8 ? 'dF' : Math.abs(rl) > 2.35 ? 'dB' : rl > 0 ? 'dR' : 'dL'; }
-  P.dT = .38; P.dodge = P.dT; P.dcd = .9; P.inv = Math.max(P.inv, (T - (P.ldT || -9) < 1.2 ? .72 : 1) * (has('pods') ? .36 : .25)); P.ldT = T; P.atk = null; P.chg = 0; P.dn = (P.dn || 0) + 1; noise(.1, .08, 3000);
+  P.dT = .52; P.dodge = P.dT; P.dcd = .9; P.inv = Math.max(P.inv, (T - (P.ldT || -9) < 1.2 ? .72 : 1) * (has('pods') ? .36 : .25)); P.ldT = T; P.atk = null; P.chg = 0; P.dn = (P.dn || 0) + 1; noise(.1, .08, 3000);
 }
 
 function updPlayer(dt) {
@@ -2297,7 +2297,7 @@ function render() {
   if (pg) {
     const cb = a ? a.combo % 3 : 0;
     if (fn) play(pg, fn.seq[fn.i][0], true, fn.seq[fn.i][1] * 1.2, 'f' + fn.n + '_' + fn.i);
-    else if (P.dodge > 0) play(pg, 'dF', true, P.dT, P.dn);
+    else if (P.dodge > 0) play(pg, 'idle');
     else if (P.hurtT > 0) play(pg, 'hitB', true, .35, 'h');
     else if (P.block) play(pg, 'block');
     else if (P.spin > 0) play(pg, 'ms', false, .45);
@@ -2305,17 +2305,40 @@ function render() {
     else if (P.chg > .15) play(pg, 'bi');
     else if (mode === 'fight' && P.mv) play(pg, 'run');
     else play(pg, w === 'bat' && !P.thr && fs ? 'bi' : 'idle');
+    // Restore the previous frame before the mixer, so procedural poses never accumulate.
+    if (!pg.userData.rollBones) {
+      pg.userData.rollBones = [];
+      const angles = { spine: -.35, chest: -.35, head: .28, upperlegl: -1.15, upperlegr: -1.15,
+        lowerlegl: 1.85, lowerlegr: 1.85, upperarml: -1.05, upperarmr: -1.05, lowerarml: -1.25, lowerarmr: -1.25 };
+      pg.traverse(b => { if (b.isBone && angles[b.name] != null)
+        pg.userData.rollBones.push({ bone: b, angle: angles[b.name], base: b.quaternion.clone() }); });
+    }
+    for (const b of pg.userData.rollBones) b.bone.quaternion.copy(b.base);
     pg.userData.mx.update(fdt);
+    for (const b of pg.userData.rollBones) b.base.copy(b.bone.quaternion);
     PIN.position.y = fn && fn.seq[fn.i][0] === 'bh' ? Math.sin(clamp(fn.t / fn.seq[fn.i][1], 0, 1) * Math.PI) * 24 : 0;
-    // кувырок: модель делает полный оборот через голову в сторону движения, вращаясь вокруг центра тела
-    if (P.dodge > 0) {
-      const kq = clamp(1 - P.dodge / (P.dT || .38), 0, 1), th = kq * kq * (3 - 2 * kq) * TAU, rl = P.drl || 0, hc = 30;
-      ROLLA.set(Math.sin(rl), 0, -Math.cos(rl)); PIN.quaternion.setFromAxisAngle(ROLLA, th);
-      ROLLO.set(0, hc, 0).applyQuaternion(PIN.quaternion); PIN.position.set(-ROLLO.x, hc - ROLLO.y + Math.sin(kq * Math.PI) * 5, -ROLLO.z);
-      PIN.scale.set(1, 1 - .12 * Math.sin(kq * Math.PI), 1);
-    } else { PIN.quaternion.set(0, 0, 0, 1); PIN.position.x = 0; PIN.position.z = 0; PIN.scale.set(1, 1, 1); }
   }
-  if (P.dodge > 0 && !pg) { PIN.rotation.z = -(1 - P.dodge / (P.dT || .38)) * TAU; PIN.position.y = 14; PIN.scale.setScalar(.8); } else if (!pg) { PIN.rotation.z = 0; PIN.position.y = 0; PIN.scale.setScalar(1); }
+  // One grounded somersault: gather, tuck, rotate, then unfold into the next pose.
+  // The pivot follows the tucked body; the animation clip contributes no second jump.
+  if (P.dodge > 0) {
+    const progress = clamp(1 - P.dodge / P.dT, 0, 1);
+    const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+    const tuck = smooth(progress / .20) * (1 - smooth((progress - .72) / .28));
+    const turn = smooth((progress - .10) / .78) * TAU;
+    const direction = Math.atan2(P.dvy, P.dvx) - P.aim;
+    const height = 32 - 12 * tuck;
+    ROLLA.set(Math.sin(direction), 0, -Math.cos(direction));
+    PIN.quaternion.setFromAxisAngle(ROLLA, turn);
+    ROLLO.set(0, 32, 0).applyQuaternion(PIN.quaternion);
+    PIN.position.set(-ROLLO.x, height - ROLLO.y, -ROLLO.z);
+    PIN.scale.set(1, 1, 1);
+    if (pg) for (const b of pg.userData.rollBones) {
+      b.bone.quaternion.multiply(new T3.Quaternion().setFromAxisAngle(new T3.Vector3(1, 0, 0), b.angle * tuck));
+    }
+  } else {
+    PIN.quaternion.identity(); PIN.position.x = 0; PIN.position.z = 0; PIN.scale.set(1, 1, 1);
+    if (!pg) PIN.position.y = 0;
+  }
   pBodyMat.emissive.set(P.rage > 0 ? '#ff4a1c' : '#000000');
   for (const k in WG) WG[k].visible = k === w && !(k === 'bat' && P.thr);
   if (P.thr) { const m = use('tb', () => { const q = new T3.Group(); q.add(box(18, 6, 6, '#2b5fd0', -22, 0, 0), box(40, 10, 10, '#d2a868', 6, 0, 0), box(4, 11, 11, '#ff5a2a', 24, 0, 0)); return q; }); m.position.set(P.thr.x, 30, P.thr.y); m.rotation.y = P.thr.rot; dRing(P.thr.x, P.thr.y, 20, '#ff5a2a', .7); }
@@ -2403,7 +2426,7 @@ function render() {
   { const dk = fs && !fs.done && fs.mut === 'dark', fg = SC.fog; fg.near += ((dk ? 90 : 450) - fg.near) * .08; fg.far += ((dk ? 560 : 2100) - fg.far) * .08; }
   for (const w of waves) { dRing(w.x, w.y, w.r, w.c, .95); dRing(w.x, w.y, w.r - 12, '#ffffff', .6); dRing(w.x, w.y, w.r + 12, '#ff2020', .7); }
   for (const mk of marks) { mk.l -= fdt; const o = clamp(mk.l / 3, 0, 1) * .42; dCirc(mk.x, mk.y, mk.r, '#000000', o); dRing(mk.x, mk.y, mk.r * 1.05, '#000000', o * 1.3); } marks = marks.filter(q => q.l > 0);
-  if (P.dodge > 0) fxGlow(P.x, P.y, '#c9b8a0', 34, .1, 6);
+  // No luminous dust trail during a dodge.
   if (P.chg > .15) { const gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(P.chg >= 1 ? '#ffffff' : wd.col); gq.material.opacity = .5 + P.chg * .5; gq.scale.setScalar(70 + P.chg * 170 + Math.sin(now * 30) * 12); gq.position.set(P.x, 44, P.y); if (Math.random() < .6) { const an = rnd(0, TAU); pts.push({ x: P.x + Math.cos(an) * 110, y: P.y + Math.sin(an) * 110, vx: -Math.cos(an) * 420, vy: -Math.sin(an) * 420, l: .22, c: wd.col, s: 2.4, st: 1 }); } }
   if (a && a.t >= a.wind && a.w !== 'vinyl') { const dd = a.d || wd[a.heavy ? 'heavy' : 'light'], kq = clamp((a.t - a.wind) / (a.dur - a.wind + .001), 0, 1), sg = a.combo % 2 ? -1 : 1, ca = a.a + sg * (kq - .5) * dd.arc * .8, gq = use('hf', () => glowS('#ffffff', 10)); gq.material.color.set(wd.col); gq.material.opacity = 1 - kq; gq.scale.setScalar(a.heavy ? 150 : 90); gq.position.set(P.x + Math.cos(ca) * dd.range * .85, 36, P.y + Math.sin(ca) * dd.range * .85); }
   for (const h of hfx) { h.l -= fdt; if (h.l <= 0) continue; const gq = use('hf', () => glowS('#ffffff', 10)), q = h.l / h.ml; gq.material.color.set(h.c); gq.material.opacity = q; gq.scale.setScalar(h.s * (1.25 - q * .5)); gq.position.set(h.x, h.h, h.y); } hfx = hfx.filter(h => h.l > 0);
