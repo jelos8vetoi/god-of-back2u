@@ -298,7 +298,9 @@ function loadLevel() {
   makeDeco();
   if (S.ch === 0) {
     const r = LV.main[0];
-    for (let i = 0; i < 5; i++) obs.push({ x: r.x + 90, y: r.y + 45 + i * 36, r: 65 });
+    for (const x of [r.x + 65, r.x + 155]) {
+      for (let i = 0; i < 6; i++) obs.push({ x, y: r.y + 60 + i * 50, r: 55 });
+    }
   }
   { const sc = LV.sec, s = sc.side, e = LV.exit, hz = s.d !== 'E', id = s.id;
     const o = { k: 'swall', id, hz, hp: 3, dead: !!S.done[id], x: s.d === 'E' ? e.x + e.w + 10 : e.cx, y: s.d === 'E' ? e.cy : s.d === 'N' ? e.y - 10 : e.y + e.h + 10 };
@@ -1433,7 +1435,14 @@ function buildWorld(th) {
       vestibule.add(box(r.w - 16, 65, 15, '#39483d', r.cx, 33, r.y + dz));
       vestibule.add(box(r.w - 16, 115, 15, '#8a806b', r.cx, 123, r.y + dz));
     }
-    vestibule.add(box(r.w, 16, r.h, '#615b50', r.cx, 188, r.cy));
+    // Перекрытие вестибюля оставляет проём над двумя маршами.
+    vestibule.add(box(r.w - 230, 16, r.h, '#615b50', r.x + 230 + (r.w - 230) / 2, 188, r.cy));
+    vestibule.add(box(230, 16, 35, '#615b50', r.x + 115, 188, r.y + r.h - 17.5));
+    vestibule.add(box(230, 16, r.h, '#615b50', r.x + 115, 400, r.cy));
+    vestibule.add(box(16, 220, r.h, '#77715e', r.x + 8, 290, r.cy));
+    for (const z of [r.y + 12, r.y + r.h - 12]) {
+      vestibule.add(box(230, 220, 15, '#77715e', r.x + 115, 290, z));
+    }
     vestibule.add(box(16, 180, r.h, '#586052', r.x + 8, 90, r.cy));
     for (const dz of [-160, 160]) {
       vestibule.add(box(18, 180, 100, '#586052', r.x + r.w - 8, 90, r.cy + dz));
@@ -1443,17 +1452,26 @@ function buildWorld(th) {
       vestibule.add(box(30, 124, 12, '#373c32', r.x + r.w - 14, 62, r.cy + offset));
     }
     vestibule.add(box(30, 10, 224, '#373c32', r.x + r.w - 14, 120, r.cy));
-    for (const dx of [-250, 170]) {
+    for (const dx of [-60, 170]) {
       vestibule.add(box(86, 133, 12, '#3d3026', r.cx + dx, 67, r.y + r.h - 24));
       vestibule.add(box(8, 5, 8, '#a18c58', r.cx + dx + 30, 61, r.y + r.h - 33));
     }
-    for (let i = 0; i < 8; i++) {
-      vestibule.add(box(120, 10 + i * 13, 22, '#666057', r.x + 90, (10 + i * 13) / 2, r.y + 40 + i * 22));
-      vestibule.add(box(4, 55, 4, '#383c36', r.x + 155, 37.5 + i * 13, r.y + 40 + i * 22));
+    // Подъём от входной площадки к развороту, затем обратно на этаж.
+    for (let i = 0; i < 10; i++) {
+      const height = (i + 1) * 16;
+      const z = r.y + 310 - i * 24;
+      vestibule.add(box(95, height, 24, '#666057', r.x + 170, height / 2, z));
+      vestibule.add(box(4, 48, 4, '#383c36', r.x + 220, height + 24, z));
+      vestibule.add(box(95, 12, 24, '#666057', r.x + 65, 160 + height - 6, r.y + 94 + i * 24));
+      vestibule.add(box(4, 48, 4, '#383c36', r.x + 115, 160 + height + 24, r.y + 94 + i * 24));
     }
-    const rail = box(8, 8, Math.hypot(154, 91) + 8, '#383c36', r.x + 155, 110.5, r.y + 117);
-    rail.rotation.x = -Math.atan2(91, 154);
-    vestibule.add(rail);
+    vestibule.add(box(210, 16, 64, '#666057', r.x + 117, 152, r.y + 50));
+    vestibule.add(box(210, 16, 60, '#666057', r.x + 117, 312, r.y + 352));
+    for (const [x, y, slope] of [[220, 136, 160 / 240], [115, 296, -160 / 240]]) {
+      const rail = box(7, 7, Math.hypot(216, 144) + 12, '#383c36', r.x + x, y, r.y + 202);
+      rail.rotation.x = Math.atan(slope);
+      vestibule.add(rail);
+    }
     for (let i = 0; i < 48; i++) {
       const x = r.x + 35 + (i * 137 % (r.w - 70));
       const y = 20 + i * 19 % 140;
