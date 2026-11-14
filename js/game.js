@@ -248,8 +248,14 @@ function begin() {
 
 /* ================= ХОД СЮЖЕТА / ЛОКАЦИЯ ================= */
 let LV = null, ents = [], objRoom = null, prompt = '', target = null;
+const entranceSolids = [];
 const inR = (r, x, y, m) => x >= r.x + m && x <= r.x + r.w - m && y >= r.y + m && y <= r.y + r.h - m;
 function okPos(x, y, m) { for (const r of LV.rects) if (inR(r, x, y, m)) return true; return false; }
+function actorCanStand(x, y, radius) {
+  if (!okPos(x, y, radius)) return false;
+  return S.ch !== 0 || !entranceSolids.some(b => b.min.y < 2 && b.max.y >= 60 &&
+    Math.hypot(x - clamp(x, b.min.x, b.max.x), y - clamp(y, b.min.z, b.max.z)) < radius + 8);
+}
 const RX = (v, m) => clamp(v, fs.room.x + m, fs.room.x + fs.room.w - m), RY = (v, m) => clamp(v, fs.room.y + m, fs.room.y + fs.room.h - m);
 const steps = () => CH[S.ch].steps;
 const exitOpen = () => { const st = steps()[S.step]; return !st || st.t === 'shop'; };
@@ -279,6 +285,7 @@ function makeDeco() {
   }
 }
 function loadLevel() {
+  entranceSolids.length = 0;
   LV = buildLevel(S.ch); ents = []; fs = null; ens = []; prj = []; haz = []; orbs = []; timers = []; bolts = []; rings = []; objRoom = null;
   if (S.ch === 0) {
     const r = LV.main[0];
@@ -941,6 +948,11 @@ function updPlayer(dt) {
     P.x = Math.min(P.x, ents[0].x - P.r - 8);
   }
   pushOut(P, P.r);
+  if (S.ch === 0 && !actorCanStand(P.x, P.y, P.r)) {
+    if (actorCanStand(P.x, oy, P.r)) P.y = oy;
+    else if (actorCanStand(ox, P.y, P.r)) P.x = ox;
+    else { P.x = ox; P.y = oy; }
+  }
   // кент идёт следом
   let tx = P.x, ty = P.y;
   for (const [f, s] of [[30, 95], [30, -95], [-70, 45], [-70, -45]]) { const x = P.x + Math.cos(P.aim) * f + Math.sin(P.aim) * s, y = P.y + Math.sin(P.aim) * f - Math.cos(P.aim) * s; if (okPos(x, y, 16) && !obs.some(b => Math.hypot(b.x - x, b.y - y) < b.r + 14)) { tx = x; ty = y; break; } }
@@ -950,7 +962,7 @@ function updPlayer(dt) {
     const tg = ens.filter(q => !q.dead && q.spawn <= 0 && dist(q, comp) < 560).sort((p, q) => dist(p, comp) - dist(q, comp))[0]; comp.at = 2.6;
     if (tg) { const an = ang(comp, tg); prj.push({ from: 'p', note: 1, x: comp.x, y: comp.y, vx: Math.cos(an) * 620, vy: Math.sin(an) * 620, r: 9, dmg: 9 * dmgMul() * (1 + S.comp * .25), life: 1, hit: new Set(), col: '#5cd0ff', rot: 0 }); tone(880, .08, 'triangle', .07, 1320); }
   }
-  pushOut(comp, 10); if (!okPos(comp.x, comp.y, 12)) { comp.x = P.x; comp.y = P.y; }
+  pushOut(comp, 10); if (!actorCanStand(comp.x, comp.y, 12)) { comp.x = P.x; comp.y = P.y; }
   const closedDoor = ents.find(o => o.k === 'frontDoor' && !o.open);
   if (closedDoor) {
     comp.x = Math.min(comp.x, closedDoor.x - 28);
@@ -1250,6 +1262,7 @@ const EMO = { bot: '🤖', mod: '🛡️', hater: '💬', clipper: '✂️', tro
 const T3 = window.THREE;
 let R3 = null, SC, CAM, SUN, worldG = null, builtDeco = null, PM, PIN, WPV, WG = {}, SHIELD, pBodyMat, CM, emesh = [], stamp = 0, spinners = [];
 let _ray, _pl, _hit, _nd, v3;
+let entranceCameraRay, entranceCameraBox;
 const cam3 = { x: AW / 2, z: AH / 2 }, geo = {}, mats = {}, pools = {}, emoT = {};
 const G = (k, f) => geo[k] || (geo[k] = f());
 function mat(c, o) { const k = c + (o ? JSON.stringify(o) : ''); if (mats[k]) return mats[k]; const m = mats[k] = new T3.MeshStandardMaterial(Object.assign({ color: c, roughness: .75, metalness: .05 }, o || {})); m.color.convertSRGBToLinear(); if (o && o.emissive) m.emissive.convertSRGBToLinear(); return m; }
@@ -1283,6 +1296,8 @@ function setPR() { if (R3) R3.setPixelRatio(Math.min(2, Math.max(.8, screenScale
 addEventListener('resize', setPR);
 
 function init3d() {
+  entranceCameraRay = new T3.Ray();
+  entranceCameraBox = new T3.Box3();
   R3 = new T3.WebGLRenderer({ canvas: $('gl'), antialias: OPT.q === 'mid', powerPreference: 'high-performance' }); R3.setSize(W, H, false); setPR();
   R3.outputEncoding = T3.sRGBEncoding; R3.toneMapping = T3.ACESFilmicToneMapping; R3.toneMappingExposure = 1.25;
   R3.info.autoReset = false; R3.shadowMap.enabled = true; R3.shadowMap.type = T3.PCFShadowMap; R3.shadowMap.autoUpdate = false;
@@ -1535,6 +1550,13 @@ function buildWorld(th) {
     add(5, 34, 28, '#756d53', front + 18, 82, r.cy + 145);
     for (let i = 0; i < 5; i++) add(2, 9, 7, '#d1c7a5', front + 22, 73 + i % 3 * 8, r.cy + 137 + i % 2 * 11);
     worldG.add(house);
+    entranceSolids.length = 0;
+    worldG.updateMatrixWorld(true);
+    for (const group of [house, vestibule]) {
+      for (const part of group.children) {
+        if (part.isMesh) entranceSolids.push(new T3.Box3().setFromObject(part));
+      }
+    }
   }
   // стены: забор-модель, земляной вал или текстурные панели с кромкой
   const wc = { grave: { model: 'p_fence', mh: 92 }, swamp: { h: 44, col: '#2a2415' } }[k] || {}, WH = wc.h || 120, fen = wc.model && MDL[wc.model];
@@ -2171,6 +2193,24 @@ function render() {
     CAM.fov = 65;
     CAM.updateProjectionMatrix();
     CAM.updateMatrixWorld();
+  }
+  if (S.ch === 0 && !cine) {
+    const ray = entranceCameraRay;
+    ray.origin.set(P.x, 55, P.y);
+    ray.direction.subVectors(CAM.position, ray.origin);
+    let distance = ray.direction.length();
+    if (distance > 0) {
+      ray.direction.multiplyScalar(1 / distance);
+      for (const solid of entranceSolids) {
+        entranceCameraBox.copy(solid).expandByScalar(10);
+        if (entranceCameraBox.containsPoint(ray.origin)) continue;
+        if (ray.intersectBox(entranceCameraBox, _hit)) {
+          distance = Math.min(distance, Math.max(0, ray.origin.distanceTo(_hit) - 2));
+        }
+      }
+      CAM.position.copy(ray.at(distance, _hit));
+      CAM.updateMatrixWorld();
+    }
   }
   if (FL && FL.intensity > .01) FL.intensity *= Math.pow(.0008, fdt); else if (FL) FL.intensity = 0;
   if (fdt > 0 && fdt < .2 && !document.hidden) {
