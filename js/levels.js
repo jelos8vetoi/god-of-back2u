@@ -114,7 +114,7 @@ const LEVELS = [
 const LV_SIZE = { start: [640, 560], fight: [1250, 900], boss: [1450, 1000], exit: [560, 480], side: [620, 540], secret: [420, 380] }, COR_L = 240, COR_W = 220;
 function buildLevel(ci) {
   const ch = CH[ci], def = LEVELS[ci], rooms = [], cors = [];
-  const mk = (kind, cx, cy) => { const [w, h] = ci === 0 && kind === 'start' ? [460, 270] : LV_SIZE[kind], r = { kind, x: cx - w / 2, y: cy - h / 2, w, h, cx, cy }; rooms.push(r); return r; };
+  const mk = (kind, cx, cy) => { const [w, h] = ci === 0 && kind === 'start' ? [720, 420] : LV_SIZE[kind], r = { kind, x: cx - w / 2, y: cy - h / 2, w, h, cx, cy }; rooms.push(r); return r; };
   const attach = (p, d, kind) => {
     const [w, h] = LV_SIZE[kind]; let cx = p.cx, cy = p.cy, c;
     if (d === 'E') { cx = p.x + p.w + COR_L + w / 2; c = { x: p.x + p.w - 40, y: cy - COR_W / 2, w: COR_L + 80, h: COR_W }; }

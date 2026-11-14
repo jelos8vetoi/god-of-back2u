@@ -296,6 +296,10 @@ function loadLevel() {
     if (s.chest) ents.push({ k: 'chest', id: s.id + 'c', loot: s.chest, x: r.cx + 180, y: r.cy + 110, room: r });
   }
   makeDeco();
+  if (S.ch === 0) {
+    const r = LV.main[0];
+    for (let i = 0; i < 5; i++) obs.push({ x: r.x + 90, y: r.y + 45 + i * 36, r: 65 });
+  }
   { const sc = LV.sec, s = sc.side, e = LV.exit, hz = s.d !== 'E', id = s.id;
     const o = { k: 'swall', id, hz, hp: 3, dead: !!S.done[id], x: s.d === 'E' ? e.x + e.w + 10 : e.cx, y: s.d === 'E' ? e.cy : s.d === 'N' ? e.y - 10 : e.y + e.h + 10 };
     ents.push(o); if (!o.dead) for (const t of [-76, 0, 76]) obs.push({ x: o.x + (hz ? t : 0), y: o.y + (hz ? 0 : t), r: 44, sw: o });
@@ -1418,20 +1422,41 @@ function buildWorld(th) {
   if (S.ch === 0) {
     const r = LV.main[0];
     const vestibule = new T3.Group();
-    const tile = fmat('#51463a');
+    const tile = new T3.MeshStandardMaterial({ color: '#514c43', roughness: 1 });
     pl({ x: r.x + 12, y: r.y + 12, w: r.w - 24, h: r.h - 24 }, tile, .7);
     for (const dz of [12, r.h - 12]) {
       vestibule.add(box(r.w - 16, 65, 15, '#39483d', r.cx, 33, r.y + dz));
-      vestibule.add(box(r.w - 16, 57, 15, '#766d59', r.cx, 94, r.y + dz));
+      vestibule.add(box(r.w - 16, 115, 15, '#8a806b', r.cx, 123, r.y + dz));
     }
+    vestibule.add(box(r.w, 16, r.h, '#615b50', r.cx, 188, r.cy));
+    vestibule.add(box(16, 180, r.h, '#586052', r.x + 8, 90, r.cy));
+    for (const dz of [-160, 160]) {
+      vestibule.add(box(18, 180, 100, '#586052', r.x + r.w - 8, 90, r.cy + dz));
+    }
+    vestibule.add(box(18, 55, 220, '#7b7364', r.x + r.w - 8, 153, r.cy));
+    for (const dx of [-250, 170]) {
+      vestibule.add(box(86, 133, 12, '#3d3026', r.cx + dx, 67, r.y + r.h - 24));
+      vestibule.add(box(8, 5, 8, '#a18c58', r.cx + dx + 30, 61, r.y + r.h - 33));
+    }
+    for (let i = 0; i < 8; i++) {
+      vestibule.add(box(120, 10 + i * 13, 22, '#666057', r.x + 90, (10 + i * 13) / 2, r.y + 40 + i * 22));
+      vestibule.add(box(4, 85, 4, '#383c36', r.x + 155, 45 + i * 13, r.y + 40 + i * 22));
+    }
+    for (let i = 0; i < 48; i++) {
+      const x = r.x + 35 + (i * 137 % (r.w - 70));
+      const y = 20 + i * 19 % 140;
+      vestibule.add(box(9 + i % 19, 2 + i % 7, 1, i % 2 ? '#6b715d' : '#a09882', x, y, r.y + 20));
+    }
+    for (let i = 0; i < 9; i++) vestibule.add(box(8, 43, 19, '#716b57', r.cx + 170 + i * 10, 26, r.y + 26));
+    for (let i = 0; i < 4; i++) vestibule.add(box(26, 36, 2, '#a79d76', r.cx + 80 + i * 30, 100, r.y + r.h - 23));
     for (let i = 0; i < 6; i++) {
       const x = r.cx - 155 + i * 30;
       vestibule.add(box(28, 39, 17, '#55574c', x, 74, r.y + 24));
       vestibule.add(box(16, 3, 3, '#242621', x, 83, r.y + 34));
     }
-    vestibule.add(box(22, 12, 22, '#9f7943', r.cx, 119, r.cy, { emissive: '#eeb053', emissiveIntensity: .65 }));
-    const bulb = new T3.PointLight('#ffbd63', .85, 260, 2);
-    bulb.position.set(r.cx, 111, r.cy);
+    vestibule.add(box(22, 12, 22, '#9f7943', r.cx, 171, r.cy, { emissive: '#eeb053', emissiveIntensity: .65 }));
+    const bulb = new T3.PointLight('#ffbd63', 1.6, 480, 2);
+    bulb.position.set(r.cx, 155, r.cy);
     vestibule.add(bulb);
     worldG.add(vestibule);
   }
@@ -1440,6 +1465,7 @@ function buildWorld(th) {
   const tex = wallTex(k), wm = wc.col ? new T3.MeshStandardMaterial({ color: wc.col, roughness: 1 }) : new T3.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: .4, roughness: .9 });
   const bx = G('box', () => new T3.BoxGeometry(1, 1, 1)), WL = [];
   for (const r of LV.rects) {
+    if (S.ch === 0 && r.kind === 'start') continue;
     for (const [hz, c, out] of [[1, r.y, -14], [1, r.y + r.h, 14], [0, r.x, -14], [0, r.x + r.w, 14]]) {
       const a0 = hz ? r.x : r.y, a1 = a0 + (hz ? r.w : r.h); let run = null;
       for (let a = a0; a <= a1 + 20; a += 20) {
@@ -2032,6 +2058,32 @@ function render() {
     const fv = 56 - fo * 13; if (Math.abs(CAM.fov - fv) > .05) { CAM.fov = fv; CAM.updateProjectionMatrix(); } }
   if (cine) { const b = cine.e, ca = camYaw + Math.PI + .5 - cine.t * .28, cd = 330 - cine.t * 45; CAM.position.set(b.x + Math.cos(ca) * cd, 70 + b.r * 1.2, b.y + Math.sin(ca) * cd); CAM.lookAt(b.x, b.r * 2.3, b.y); if (CAM.fov !== 44) { CAM.fov = 44; CAM.updateProjectionMatrix(); } }
   CAM.updateMatrixWorld();
+  const entrance = LV.main[0];
+  const indoors = S.ch === 0 && inR(entrance, P.x, P.y, 0);
+  if (AMB) AMB.visible = !indoors;
+  const environment = ENVC[th.deco] || ENVC.snow;
+  SUN.intensity = indoors ? .025 : environment.si;
+  if (HEMI) HEMI.intensity = indoors ? .09 : environment.hi;
+  for (const light of SC.children) {
+    if (light.isDirectionalLight && light !== SUN) light.intensity = indoors ? .025 : .45;
+  }
+  if (indoors) {
+    if (mode === 'dlg' && S.step === 0) {
+      const speaker = dq[di]?.split('|')[0];
+      const subject = speaker === 'M' ? comp : P;
+      const other = speaker === 'M' ? P : comp;
+      const angle = Math.atan2(other.y - subject.y, other.x - subject.x);
+      CAM.position.set(subject.x + Math.cos(angle + .55) * 110, 63, subject.y + Math.sin(angle + .55) * 110);
+      CAM.lookAt(subject.x, 49, subject.y);
+    } else {
+      CAM.position.set(clamp(P.x - fx * 105, entrance.x + 25, entrance.x + entrance.w - 25),
+        72, clamp(P.y - fz * 105, entrance.y + 25, entrance.y + entrance.h - 25));
+      CAM.lookAt(P.x + fx * 100, 48, P.y + fz * 100);
+    }
+    CAM.fov = 65;
+    CAM.updateProjectionMatrix();
+    CAM.updateMatrixWorld();
+  }
   if (FL && FL.intensity > .01) FL.intensity *= Math.pow(.0008, fdt); else if (FL) FL.intensity = 0;
   if (fdt > 0 && fdt < .2 && !document.hidden) {
     fpsA += (1 / fdt - fpsA) * .05; fpsN += (1 / fdt - fpsN) * .1; qT += fdt;
@@ -2050,7 +2102,7 @@ function render() {
 
   // Пахан
   const w = S.weapon, wd = WP[w], a = P.atk;
-  PM.position.set(P.x, 0, P.y); PM.rotation.y = -P.aim;
+  PM.position.set(P.x, 0, P.y); PM.rotation.y = indoors && mode === 'dlg' ? -ang(P, comp) : -P.aim;
   if (!PM.userData.mdl && MDL.vanek) {
     const q = inst('vanek', 72, { tint: '#4a4d5a', mix: .5 }); PIN.children.slice(0, 5).forEach(c => { c.visible = false; }); PIN.add(q); PM.userData.mdl = q;
     let hs = null; q.traverse(o => { if (/^handslot.?r$/i.test(o.name)) hs = o; });
@@ -2100,7 +2152,7 @@ function render() {
   if (P.spin > 0) dRing(P.x, P.y, 155, '#49e0ff', .8);
   if (P.rage > 0) dRing(P.x, P.y, 34 + Math.sin(now * 12) * 4, '#ff4a1c', .9);
   { const cg = CM.userData.mdl, cmv = Math.hypot(comp.x - (comp.lx || 0), comp.y - (comp.ly || 0)) > .7; comp.lx = comp.x; comp.ly = comp.y;
-    CM.position.set(comp.x, cg ? 0 : Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = -P.aim;
+    CM.position.set(comp.x, cg ? 0 : Math.abs(Math.sin(now * 6)) * 2, comp.y); CM.rotation.y = indoors && mode === 'dlg' ? -ang(comp, P) : -P.aim;
     if (cg) { if (comp.sayT > 0) play(cg, 'cheer'); else play(cg, cmv ? 'run' : 'idle'); cg.userData.mx.update(fdt); } }
   if (P.chg > .15) dRing(P.x, P.y, 30 + P.chg * 44, P.chg >= 1 ? '#ffffff' : wd.col, .9);
   if (P.crit > 0) dRing(P.x, P.y, 26, '#ffffff', .5 + .4 * Math.sin(now * 16));
